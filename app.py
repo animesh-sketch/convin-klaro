@@ -400,18 +400,27 @@ hr { border:none; border-top:1px solid rgba(255,255,255,0.07) !important; margin
     box-shadow:0 0 0 1px rgba(151,71,255,0.3) !important;
 }
 
-/* Expander */
+/* Expander — FAQ cards */
 .streamlit-expanderHeader {
-    background:rgba(255,255,255,0.03) !important;
-    border:1px solid rgba(255,255,255,0.07) !important;
-    border-radius:10px !important;
-    color:#C8C8D8 !important;
-    font-size:0.86rem !important;
+    background: rgba(151,71,255,0.08) !important;
+    border: 1px solid rgba(151,71,255,0.22) !important;
+    border-radius: 10px !important;
+    color: #F0F0FA !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
 }
+.streamlit-expanderHeader:hover {
+    background: rgba(151,71,255,0.14) !important;
+    border-color: rgba(151,71,255,0.4) !important;
+    color: #FFFFFF !important;
+}
+.streamlit-expanderHeader svg { color: #C084FC !important; }
 .streamlit-expanderContent {
-    border:1px solid rgba(255,255,255,0.05) !important;
-    border-top:none !important; border-radius:0 0 10px 10px !important;
-    background:rgba(255,255,255,0.02) !important;
+    border: 1px solid rgba(151,71,255,0.18) !important;
+    border-top: none !important;
+    border-radius: 0 0 10px 10px !important;
+    background: rgba(20,12,40,0.85) !important;
+    padding: 4px 0 !important;
 }
 
 /* Progress */
@@ -485,11 +494,12 @@ hr { border:none; border-top:1px solid rgba(255,255,255,0.07) !important; margin
 
 .cat-label {
     display:inline-flex; align-items:center; gap:6px;
-    background:linear-gradient(135deg,rgba(151,71,255,0.2),rgba(99,102,241,0.2));
-    border:1px solid rgba(151,71,255,0.3);
-    color:#C084FC !important; padding:5px 14px; border-radius:20px;
-    font-size:0.7rem; font-weight:700; letter-spacing:0.05em;
-    margin:20px 0 10px;
+    background:linear-gradient(135deg,rgba(151,71,255,0.25),rgba(99,102,241,0.25));
+    border:1px solid rgba(151,71,255,0.45);
+    color:#E0AAFF !important; padding:6px 16px; border-radius:20px;
+    font-size:0.75rem; font-weight:800; letter-spacing:0.06em;
+    margin:24px 0 12px;
+    box-shadow: 0 0 12px rgba(151,71,255,0.15);
 }
 
 .faq-card {
@@ -670,8 +680,13 @@ hr { border:none; border-top:1px solid rgba(255,255,255,0.07) !important; margin
 }
 .streamlit-expanderContent p,
 .streamlit-expanderContent li,
+.streamlit-expanderContent div,
 .streamlit-expanderContent span {
-    color: #C8C8D8 !important;
+    color: #EAEAF5 !important;
+}
+.streamlit-expanderContent strong,
+.streamlit-expanderContent b {
+    color: #C084FC !important;
 }
 
 /* ══ TOPNAV NAV BUTTONS ══════════════════════════════════ */
@@ -1751,9 +1766,16 @@ def render_faq():
                 exp_label = f"Q: {faq['question']}"
                 with st.expander(exp_label, expanded=False):
                     st.markdown(
-                        f"<div style='margin-bottom:6px'>{badge_html}</div>"
-                        f"<div style='font-size:0.875rem;color:#C8C8D8;line-height:1.75;"
-                        f"padding:4px 0 8px 0'>{a_rendered}</div>",
+                        f"<div style='margin-bottom:10px'>{badge_html}</div>"
+                        f"<div style='"
+                        f"font-size:0.9rem;"
+                        f"color:#EAEAF5;"
+                        f"line-height:1.8;"
+                        f"padding:10px 16px 12px;"
+                        f"background:rgba(255,255,255,0.04);"
+                        f"border-left:3px solid #9747FF;"
+                        f"border-radius:0 8px 8px 0;"
+                        f"'>{a_rendered}</div>",
                         unsafe_allow_html=True,
                     )
                     if st.button(
