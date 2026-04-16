@@ -154,7 +154,7 @@ html, body, [class*="css"] {
 .topnav-right { display: flex; align-items: center; gap: 10px; }
 .topnav-status {
     display: flex; align-items: center; gap: 6px;
-    font-size: 0.71rem; color: #374151; font-weight: 500;
+    font-size: 0.71rem; color: #9CA3AF; font-weight: 500;
 }
 .live-dot {
     width: 7px; height: 7px; border-radius: 50%;
@@ -208,7 +208,7 @@ html, body, [class*="css"] {
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 .welcome-sub {
-    font-size: 0.88rem; color: #475569; line-height: 1.72;
+    font-size: 0.88rem; color: #94A3B8; line-height: 1.72;
     max-width: 420px; margin: 0 auto;
 }
 
@@ -220,7 +220,7 @@ html, body, [class*="css"] {
     backdrop-filter: blur(14px);
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: 30px; padding: 8px 18px;
-    font-size: 0.78rem; color: #374151;
+    font-size: 0.78rem; color: #9CA3AF;
     animation: popIn 0.42s ease forwards; opacity: 0;
     transition: border-color 0.2s, background 0.2s;
 }
@@ -250,7 +250,7 @@ html, body, [class*="css"] {
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 .no-kb-hint {
-    margin-top: 22px; font-size: 0.76rem; color: #1F2937;
+    margin-top: 22px; font-size: 0.76rem; color: #6B7280;
     background: rgba(255,255,255,0.02);
     border: 1px dashed rgba(255,255,255,0.07);
     border-radius: 20px; padding: 8px 22px; display: inline-block;
@@ -277,8 +277,8 @@ html, body, [class*="css"] {
     font-size: 0.79rem !important;
     background: rgba(17,24,39,0.65) !important;
     backdrop-filter: blur(14px) !important;
-    border: 1px solid rgba(255,255,255,0.07) !important;
-    color: #4B5563 !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
+    color: #9CA3AF !important;
     white-space: nowrap !important;
     transition: all 0.25s cubic-bezier(0.4,0,0.2,1) !important;
 }
@@ -341,7 +341,7 @@ html, body, [class*="css"] {
 }
 .msg-ai-bubble b, .msg-ai-bubble strong { color: #818CF8; font-weight: 600; }
 .msg-ai-bubble ol, .msg-ai-bubble ul    { padding-left: 18px; margin: 8px 0; }
-.msg-ai-bubble li { margin-bottom: 5px; color: #64748B; }
+.msg-ai-bubble li { margin-bottom: 5px; color: #94A3B8; }
 .msg-ai-bubble blockquote {
     border-left: 3px solid #10B981;
     background: rgba(16,185,129,0.07);
@@ -349,13 +349,13 @@ html, body, [class*="css"] {
     padding: 7px 14px; margin: 10px 0 4px;
     font-size: 0.82rem; color: #34D399;
 }
-.msg-ts       { font-size:0.6rem; color:#1F2937; margin-top:5px; text-align:right; }
+.msg-ts       { font-size:0.6rem; color:#6B7280; margin-top:5px; text-align:right; }
 .msg-ts-left  { text-align:left; margin-left:46px; }
 .sources-bar  { display:flex; align-items:center; gap:5px; margin-top:8px; margin-left:46px; flex-wrap:wrap; }
 .source-tag {
-    font-size: 0.62rem; font-weight: 500; color: #1F2937;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.62rem; font-weight: 500; color: #6B7280;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
     padding: 2px 9px; border-radius: 10px;
 }
 
@@ -384,7 +384,7 @@ html, body, [class*="css"] {
     box-shadow: 0 0 0 3px rgba(99,102,241,0.09), 0 2px 12px rgba(0,0,0,0.16) !important;
 }
 .input-bar-inner .stTextInput input { font-size:0.9rem !important; color:#E5E7EB !important; background:transparent !important; }
-.input-bar-inner .stTextInput input::placeholder { color:#1F2937 !important; }
+.input-bar-inner .stTextInput input::placeholder { color:#4B5563 !important; }
 
 /* ══ BUTTONS ════════════════════════════════════════════ */
 .stButton > button {
@@ -405,15 +405,15 @@ html, body, [class*="css"] {
 }
 .stButton > button[kind="secondary"] {
     background: rgba(17,24,39,0.65) !important;
-    color: #6B7280 !important;
-    border: 1px solid rgba(255,255,255,0.07) !important;
+    color: #9CA3AF !important;
+    border: 1px solid rgba(255,255,255,0.10) !important;
     backdrop-filter: blur(10px) !important;
 }
 .stButton > button[kind="secondary"]:hover {
-    border-color: rgba(99,102,241,0.32) !important;
-    color: #818CF8 !important;
-    background: rgba(99,102,241,0.07) !important;
-    box-shadow: 0 4px 16px rgba(99,102,241,0.10) !important;
+    border-color: rgba(99,102,241,0.38) !important;
+    color: #C4C9D4 !important;
+    background: rgba(99,102,241,0.08) !important;
+    box-shadow: 0 4px 16px rgba(99,102,241,0.12) !important;
 }
 
 /* ══ TEXT INPUTS ════════════════════════════════════════ */
@@ -429,14 +429,14 @@ html, body, [class*="css"] {
     box-shadow: 0 0 0 3px rgba(99,102,241,0.09) !important;
 }
 .stTextInput input { color: #E5E7EB !important; background: transparent !important; }
-.stTextInput input::placeholder { color: #1F2937 !important; }
-.stTextInput label { color: #6B7280 !important; font-size: 0.82rem !important; font-weight: 500 !important; }
+.stTextInput input::placeholder { color: #4B5563 !important; }
+.stTextInput label { color: #94A3B8 !important; font-size: 0.82rem !important; font-weight: 500 !important; }
 
 /* ══ SETTINGS PAGE ═══════════════════════════════════════ */
 .settings-page { padding-top: 62px; min-height: 100vh; }
 .settings-inner { max-width: 900px; margin: 0 auto; padding: 44px 32px; }
 .settings-title { font-size:1.3rem; font-weight:800; color:#E5E7EB; letter-spacing:-0.025em; margin-bottom:4px; }
-.settings-sub   { font-size:0.82rem; color:#374151; margin-bottom:30px; }
+.settings-sub   { font-size:0.82rem; color:#9CA3AF; margin-bottom:30px; }
 
 /* File rows */
 .file-row {
@@ -453,8 +453,8 @@ html, body, [class*="css"] {
     background: rgba(17,24,39,0.80);
 }
 .file-row-icon { font-size:1.05rem; flex-shrink:0; }
-.file-row-name { font-size:0.82rem; font-weight:500; color:#6B7280; flex:1; }
-.file-row-meta { font-size:0.69rem; color:#1F2937; }
+.file-row-name { font-size:0.82rem; font-weight:500; color:#9CA3AF; flex:1; }
+.file-row-meta { font-size:0.69rem; color:#6B7280; }
 
 /* Upload zone */
 div[data-testid="stFileUploader"] {
@@ -478,10 +478,10 @@ div[data-testid="stFileUploader"]:hover {
 .stTabs [data-baseweb="tab"] {
     border-radius: 9px !important; font-size: 0.8rem !important;
     font-weight: 500 !important; padding: 7px 16px !important;
-    color: #374151 !important;
+    color: #9CA3AF !important;
     transition: color 0.2s !important;
 }
-.stTabs [data-baseweb="tab"]:hover { color: #6B7280 !important; }
+.stTabs [data-baseweb="tab"]:hover { color: #C4C9D4 !important; }
 .stTabs [aria-selected="true"] {
     background: rgba(99,102,241,0.14) !important;
     color: #818CF8 !important;
@@ -537,13 +537,13 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 }
 [data-testid="stExpander"] summary {
     background: transparent !important;
-    color: #6B7280 !important;
+    color: #9CA3AF !important;
     font-size: 0.88rem !important; font-weight: 600 !important;
     border-radius: 12px !important;
     padding: 13px 18px !important;
     transition: color 0.2s !important;
 }
-[data-testid="stExpander"] summary:hover { color: #94A3B8 !important; }
+[data-testid="stExpander"] summary:hover { color: #E5E7EB !important; }
 [data-testid="stExpander"] summary span,
 [data-testid="stExpander"] summary p { color: inherit !important; font-weight: 600 !important; }
 [data-testid="stExpander"] > div:last-child {
@@ -582,7 +582,7 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
     color: #E5E7EB !important; font-weight: 800 !important; font-size: 1.6rem !important;
 }
 [data-testid="metric-container"] [data-testid="stMetricLabel"] {
-    color: #374151 !important; font-size: 0.75rem !important; font-weight: 500 !important;
+    color: #9CA3AF !important; font-size: 0.75rem !important; font-weight: 500 !important;
 }
 
 /* Alerts */
@@ -617,7 +617,7 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
     pointer-events: none;
 }
 .faq-hero-left h2 { color: #E5E7EB !important; font-size: 1.22rem; font-weight: 800; margin: 0; letter-spacing: -0.025em; }
-.faq-hero-left p  { color: #374151 !important; font-size: 0.78rem; margin: 7px 0 0; }
+.faq-hero-left p  { color: #9CA3AF !important; font-size: 0.78rem; margin: 7px 0 0; }
 .faq-stat-row { display: flex; gap: 14px; z-index: 1; }
 .faq-stat-box {
     background: rgba(17,24,39,0.65);
@@ -632,7 +632,7 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
     background: linear-gradient(135deg, #E5E7EB, #818CF8);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
-.faq-stat-box .l { font-size: 0.6rem; color: #374151 !important; text-transform: uppercase; letter-spacing: 0.10em; margin-top: 2px; }
+.faq-stat-box .l { font-size: 0.6rem; color: #9CA3AF !important; text-transform: uppercase; letter-spacing: 0.10em; margin-top: 2px; }
 
 .cat-label {
     display: inline-flex; align-items: center; gap: 7px;
@@ -698,9 +698,9 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
     border: 1px solid rgba(255,255,255,0.05);
     box-shadow: 0 4px 28px rgba(0,0,0,0.16);
 }
-.no-faq-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.6; }
-.no-faq h3 { font-size: 1rem; color: #4B5563; font-weight: 600; margin-bottom: 8px; }
-.no-faq p  { font-size: 0.82rem; color: #1F2937; }
+.no-faq-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.7; }
+.no-faq h3 { font-size: 1rem; color: #94A3B8; font-weight: 600; margin-bottom: 8px; }
+.no-faq p  { font-size: 0.82rem; color: #6B7280; }
 
 /* WA panel */
 .wa-panel {
@@ -728,15 +728,85 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 }
 .wa-chat-top  { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
 .wa-chat-icon { font-size: 1.05rem; }
-.wa-chat-name { font-size: 0.82rem; font-weight: 600; color: #6B7280; flex: 1; }
+.wa-chat-name { font-size: 0.82rem; font-weight: 600; color: #9CA3AF; flex: 1; }
 .wa-chat-badge {
     font-size: 0.65rem; font-weight: 600; color: #10B981;
     background: rgba(16,185,129,0.08);
     border: 1px solid rgba(16,185,129,0.18);
     border-radius: 10px; padding: 2px 9px;
 }
-.wa-chat-meta { font-size: 0.72rem; color: #374151; margin-bottom: 4px; }
+.wa-chat-meta { font-size: 0.72rem; color: #9CA3AF; margin-bottom: 4px; }
 .wa-chat-qa   { font-size: 0.7rem; color: #10B981; font-weight: 600; margin-top: 5px; }
+
+/* ── Chat side panel ── */
+.chat-panel-wrap {
+    background: rgba(13,17,30,0.97);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid rgba(99,102,241,0.22);
+    border-radius: 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.50), 0 0 0 1px rgba(99,102,241,0.06);
+    overflow: hidden;
+    padding-bottom: 12px;
+}
+.chat-panel-header {
+    background: linear-gradient(135deg, rgba(17,24,39,0.96) 0%, rgba(26,32,53,0.96) 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 16px 20px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.chat-panel-title {
+    font-size: 0.88rem; font-weight: 700; color: #E5E7EB;
+    letter-spacing: -0.015em; display: flex; align-items: center; gap: 9px;
+}
+.chat-panel-title .live-dot-sm {
+    width: 8px; height: 8px; border-radius: 50%; background: #10B981;
+    box-shadow: 0 0 7px rgba(16,185,129,0.60);
+    animation: livepulse 3s ease-in-out infinite;
+}
+.chat-panel-title .sub {
+    font-size: 0.7rem; color: #6B7280; font-weight: 400; margin-top: 2px;
+}
+.chat-panel-msgs {
+    padding: 14px 16px; max-height: 52vh; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(99,102,241,0.2) transparent;
+}
+.mini-msg-user {
+    display: flex; justify-content: flex-end; margin-bottom: 12px;
+}
+.mini-msg-user span {
+    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
+    color: #EEF2FF; padding: 9px 14px;
+    border-radius: 16px 16px 4px 16px;
+    font-size: 0.83rem; line-height: 1.55; max-width: 82%;
+    box-shadow: 0 3px 14px rgba(99,102,241,0.28);
+}
+.mini-msg-ai {
+    display: flex; align-items: flex-start; gap: 9px; margin-bottom: 12px;
+}
+.mini-msg-ai .av {
+    width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
+    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.62rem; color: #EEF2FF; font-weight: 700;
+    box-shadow: 0 0 14px rgba(99,102,241,0.22);
+}
+.mini-msg-ai .bubble {
+    background: rgba(17,24,39,0.75);
+    backdrop-filter: blur(12px);
+    color: #C4C9D4;
+    padding: 10px 14px;
+    border-radius: 4px 16px 16px 16px;
+    font-size: 0.83rem; line-height: 1.65; max-width: 82%;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+}
+.mini-chat-empty {
+    text-align: center; padding: 32px 16px;
+}
+.mini-chat-empty .icon { font-size: 1.8rem; margin-bottom: 10px; opacity: 0.6; }
+.mini-chat-empty .text { font-size: 0.8rem; color: #6B7280; line-height: 1.6; }
+.mini-chat-input-row { padding: 8px 16px 0; display: flex; gap: 8px; align-items: center; }
 
 /* Nav pill buttons */
 div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button,
@@ -838,8 +908,10 @@ def total_sources():
 # ══════════════════════════════════════════════════════════════════
 _DEFAULTS = {
     "page":          "faq",
+    "chat_open":     False,
     "chat_history":  [],
     "_last_input":   "",
+    "_mini_last":    "",
     "quick_q":       "",
     "show_sources":  False,
     "_kb_loaded":    False,
@@ -852,11 +924,13 @@ for k, v in _DEFAULTS.items():
 
 load_kb()
 
-# Handle FAB / link navigation via query params (?nav=chat or ?nav=faq)
+# Handle FAB / link navigation via query params
 if "nav" in st.query_params:
     _nav_target = st.query_params["nav"]
     st.query_params.clear()
-    if _nav_target in ("chat", "faq", "settings"):
+    if _nav_target == "chat":
+        st.session_state.chat_open = True   # open panel, don't leave the page
+    elif _nav_target in ("faq", "settings"):
         st.session_state.page = _nav_target
 
 
@@ -1497,10 +1571,12 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
                     st.session_state.page = "settings"
                     st.rerun()
         if show_chat_btn:
+            chat_open = st.session_state.get("chat_open", False)
             with c_faq:
-                if st.button("💬 Chat", key="chat_nav_btn", type="secondary",
+                btn_label = "✕ Chat" if chat_open else "💬 Chat"
+                if st.button(btn_label, key="chat_nav_btn", type="secondary",
                              use_container_width=True):
-                    st.session_state.page = "chat"
+                    st.session_state.chat_open = not chat_open
                     st.rerun()
             with c_set:
                 if st.button("⚙ Settings", key="settings_btn_faq", type="secondary",
@@ -2076,9 +2152,100 @@ def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
                     key=f"faq_ask_{tab_key}_{cat}_{idx}",
                     type="secondary",
                 ):
-                    st.session_state.quick_q = faq["question"]
-                    st.session_state.page    = "chat"
+                    st.session_state.quick_q  = faq["question"]
+                    st.session_state.chat_open = True
                     st.rerun()
+
+
+def _render_mini_chat():
+    """Inline chat panel rendered as a side column on the FAQ page."""
+    # ── Panel header
+    st.markdown("""
+    <div class="chat-panel-wrap">
+    <div class="chat-panel-header">
+      <div class="chat-panel-title">
+        <span class="live-dot-sm"></span>
+        <div>
+          AI Chat
+          <div class="sub">Animesh · Powered by Claude</div>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Close button
+    if st.button("✕ Close", key="close_chat_panel", type="secondary"):
+        st.session_state.chat_open = False
+        st.session_state.quick_q   = ""
+        st.rerun()
+
+    # ── Messages feed
+    history = st.session_state.get("chat_history", [])
+    msgs_html = ""
+    for msg in history[-20:]:
+        content = msg["content"]
+        if msg["role"] == "user":
+            safe = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+            msgs_html += f'<div class="mini-msg-user"><span>{safe}</span></div>'
+        else:
+            msgs_html += (
+                f'<div class="mini-msg-ai">'
+                f'<div class="av">AI</div>'
+                f'<div class="bubble">{content}</div>'
+                f'</div>'
+            )
+
+    if msgs_html:
+        st.markdown(
+            f'<div class="chat-panel-msgs">{msgs_html}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown("""
+        <div class="chat-panel-msgs">
+          <div class="mini-chat-empty">
+            <div class="icon">✦</div>
+            <div class="text">
+              Hi, I'm Animesh.<br>Ask me anything about Convin Sense.
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Input
+    pre = st.session_state.get("quick_q", "")
+    user_input = st.text_input(
+        "q", placeholder="Ask a question…",
+        label_visibility="collapsed",
+        key="mini_chat_input",
+        value=pre,
+    )
+    if pre:
+        st.session_state.quick_q = ""
+    send = st.button("Send →", key="mini_chat_send", type="primary", use_container_width=True)
+
+    active = user_input.strip()
+    if (send or active) and active and active != st.session_state.get("_mini_last", ""):
+        st.session_state["_mini_last"] = active
+        ts_now = datetime.now().strftime("%H:%M")
+        st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts_now})
+        with st.spinner(""):
+            try:
+                answer, sources = ask_claude(active)
+            except Exception as e:
+                answer = f"Something went wrong — please try again. *(Error: {e})*"
+                sources = []
+        st.session_state.chat_history.append(
+            {"role": "assistant", "content": answer, "ts": ts_now, "sources": sources}
+        )
+        st.rerun()
+
+    if st.button("🗑 Clear chat", key="mini_clear_chat", type="secondary", use_container_width=True):
+        st.session_state.chat_history = []
+        st.session_state["_mini_last"] = ""
+        st.rerun()
 
 
 def render_faq():
@@ -2086,6 +2253,7 @@ def render_faq():
 
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
+    chat_open = st.session_state.get("chat_open", False)
 
     # Partition into WhatsApp, generic, and curated Convin FAQ
     wa_faqs      = [f for f in faqs if f["category"].startswith("WhatsApp:")]
@@ -2100,203 +2268,214 @@ def render_faq():
     all_cats = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
     wa_cats  = list(dict.fromkeys(f["category"] for f in wa_faqs))
 
+    # ── Layout: 2-col when chat open, full-width otherwise ────────
+    if chat_open:
+        faq_col, chat_col = st.columns([3, 2], gap="small")
+    else:
+        faq_col = st.container()
+
+    with faq_col:
+
     # ── Hero ──────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div class="faq-hero">
-      <div class="faq-hero-left">
-        <h2>✦ Answer Studio</h2>
-        <p>Auto-generated answers from your entire knowledge base — always up to date</p>
-      </div>
-      <div class="faq-stat-row">
-        <div class="faq-stat-box"><div class="n">{len(faq_curated)}</div><div class="l">FAQ</div></div>
-        <div class="faq-stat-box"><div class="n">{len(generic_faqs)}</div><div class="l">Q&amp;A</div></div>
-        <div class="faq-stat-box"><div class="n">{len(wa_faqs)}</div><div class="l">WhatsApp Q&amp;A</div></div>
-        <div class="faq-stat-box"><div class="n">{total}</div><div class="l">KB Sources</div></div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
+        # ── Hero ──────────────────────────────────────────────────────
+        st.markdown(f"""
+        <div class="faq-hero">
+          <div class="faq-hero-left">
+            <h2>✦ Answer Studio</h2>
+            <p>Auto-generated answers from your entire knowledge base — always up to date</p>
+          </div>
+          <div class="faq-stat-row">
+            <div class="faq-stat-box"><div class="n">{len(faq_curated)}</div><div class="l">FAQ</div></div>
+            <div class="faq-stat-box"><div class="n">{len(generic_faqs)}</div><div class="l">Q&amp;A</div></div>
+            <div class="faq-stat-box"><div class="n">{len(wa_faqs)}</div><div class="l">WhatsApp Q&amp;A</div></div>
+            <div class="faq-stat-box"><div class="n">{total}</div><div class="l">KB Sources</div></div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # ── Action bar ────────────────────────────────────────────────
-    ab1, ab2, ab3, ab4 = st.columns([3, 2, 2, 2])
-    with ab1:
-        gen_btn = st.button(
-            "✨ Generate Answers" if not faqs else "🔄 Regenerate Answers",
-            type="primary", use_container_width=True, disabled=(total == 0),
-        )
-    with ab2:
-        if faqs and st.button("🗑️ Clear All", use_container_width=True):
-            st.session_state.kb_faqs = []
-            save_kb(); st.rerun()
-    with ab3:
-        if faqs:
-            st.download_button(
-                "⬇️ Export JSON",
-                data=json.dumps(faqs, indent=2, ensure_ascii=False),
-                file_name="answer-studio.json", mime="application/json",
-                use_container_width=True,
+        # ── Action bar ────────────────────────────────────────────────
+        ab1, ab2, ab3, ab4 = st.columns([3, 2, 2, 2])
+        with ab1:
+            gen_btn = st.button(
+                "✨ Generate Answers" if not faqs else "🔄 Regenerate Answers",
+                type="primary", use_container_width=True, disabled=(total == 0),
             )
-    with ab4:
-        if faqs:
-            lines = []
-            for cat in all_cats:
-                lines += [f"\n{'='*50}", f"  {cat.upper()}", f"{'='*50}\n"]
-                for idx, faq in enumerate([f for f in faqs if f["category"] == cat], 1):
-                    lines += [f"Q{idx}. {faq['question']}", f"A:  {faq['answer']}\n"]
-            st.download_button(
-                "⬇️ Export TXT",
-                data="\n".join(lines), file_name="answer-studio.txt", mime="text/plain",
-                use_container_width=True,
-            )
+        with ab2:
+            if faqs and st.button("🗑️ Clear All", use_container_width=True):
+                st.session_state.kb_faqs = []
+                save_kb(); st.rerun()
+        with ab3:
+            if faqs:
+                st.download_button(
+                    "⬇️ Export JSON",
+                    data=json.dumps(faqs, indent=2, ensure_ascii=False),
+                    file_name="answer-studio.json", mime="application/json",
+                    use_container_width=True,
+                )
+        with ab4:
+            if faqs:
+                lines = []
+                for cat in all_cats:
+                    lines += [f"\n{'='*50}", f"  {cat.upper()}", f"{'='*50}\n"]
+                    for idx, faq in enumerate([f for f in faqs if f["category"] == cat], 1):
+                        lines += [f"Q{idx}. {faq['question']}", f"A:  {faq['answer']}\n"]
+                st.download_button(
+                    "⬇️ Export TXT",
+                    data="\n".join(lines), file_name="answer-studio.txt", mime="text/plain",
+                    use_container_width=True,
+                )
 
-    if total == 0:
-        st.info("Add documents or links from Settings first, then click Generate.")
+        if total == 0:
+            st.info("Add documents or links from Settings first, then click Generate.")
 
-    # ── Generate ──────────────────────────────────────────────────
-    if gen_btn:
-        prog_ph   = st.empty()
-        status_ph = st.empty()
+        # ── Generate ──────────────────────────────────────────────────
+        if gen_btn:
+            prog_ph   = st.empty()
+            status_ph = st.empty()
 
-        docs_n  = len(st.session_state.get("kb_documents", []))
-        links_n = len(st.session_state.get("kb_links", [])) + len(st.session_state.get("kb_crawled", []))
-        wa_n    = len(st.session_state.get("kb_whatsapp", []))
-        passes  = sum(1 for x in [docs_n, links_n, wa_n] if x > 0)
+            docs_n  = len(st.session_state.get("kb_documents", []))
+            links_n = len(st.session_state.get("kb_links", [])) + len(st.session_state.get("kb_crawled", []))
+            wa_n    = len(st.session_state.get("kb_whatsapp", []))
+            passes  = sum(1 for x in [docs_n, links_n, wa_n] if x > 0)
 
-        status_ph.markdown(
-            f"<span style='color:#A78BFA;font-size:0.85rem'>"
-            f"🤖 Running {passes} extraction pass(es) across all sources — "
-            f"building your Answer Studio…</span>",
-            unsafe_allow_html=True,
-        )
-        prog_ph.progress(0.05)
-
-        def _progress(pct, label):
-            prog_ph.progress(pct)
             status_ph.markdown(
-                f"<span style='color:#A78BFA;font-size:0.85rem'>{label}</span>",
+                f"<span style='color:#A78BFA;font-size:0.85rem'>"
+                f"🤖 Running {passes} extraction pass(es) across all sources — "
+                f"building your Answer Studio…</span>",
                 unsafe_allow_html=True,
             )
+            prog_ph.progress(0.05)
 
-        try:
-            new_faqs = generate_faqs(progress_cb=_progress)
-            prog_ph.progress(1.0)
-            if new_faqs:
-                st.session_state.kb_faqs = new_faqs
-                save_kb()
-                prog_ph.empty()
-                n_cats = len(set(f["category"] for f in new_faqs))
-                status_ph.success(
-                    f"✅ {len(new_faqs)} answers generated across {n_cats} categories — saved to Answer Studio!"
-                )
-                st.rerun()
-            else:
-                prog_ph.empty()
-                status_ph.warning("No answers extracted. Try adding more content.")
-        except Exception as e:
-            prog_ph.empty()
-            status_ph.error(f"Error: {e}")
-
-    # ── 3-Tab layout ──────────────────────────────────────────────
-    tab_faq, tab_generic, tab_wa = st.tabs([
-        f"📋  FAQ  ({len(faq_curated)})",
-        f"💡  Q&A  ({len(generic_faqs)})",
-        f"💬  WhatsApp  ({len(wa_faqs)})",
-    ])
-
-    # ── Tab 1: Curated Convin Sense FAQ ───────────────────────────
-    with tab_faq:
-        if faq_curated:
-            st.markdown(
-                "<div style='font-size:0.78rem;color:#8D90AA;margin-bottom:16px'>"
-                "Curated Q&amp;As about <b style='color:#A78BFA'>Convin Sense</b> — "
-                "product features, capabilities, pricing &amp; how it works.</div>",
-                unsafe_allow_html=True,
-            )
-            _render_faq_list(faq_curated, "faq", "search_faq")
-        elif faqs:
-            # FAQs exist but none match the curated categories — show a hint
-            st.markdown("""
-            <div class="no-faq">
-              <div class="no-faq-icon">✦</div>
-              <h3>No Convin Sense FAQs found</h3>
-              <p>Regenerate answers after adding the Convin product docs or pages.</p>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown("""
-            <div class="no-faq">
-              <div class="no-faq-icon">✦</div>
-              <h3>Answer Studio is empty</h3>
-              <p>Load at least one source in Settings,<br>
-                 then click <b>✨ Generate Answers</b> above.</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # ── Tab 2: Full generic Q&A (docs + web) ─────────────────────
-    with tab_generic:
-        if generic_faqs:
-            st.markdown(
-                "<div style='font-size:0.78rem;color:#8D90AA;margin-bottom:16px'>"
-                "All Q&amp;As extracted from <b style='color:#A78BFA'>documents</b> and "
-                "<b style='color:#A78BFA'>web pages</b> — covering every topic and category.</div>",
-                unsafe_allow_html=True,
-            )
-            _render_faq_list(generic_faqs, "generic", "search_generic")
-        else:
-            st.markdown("""
-            <div class="no-faq">
-              <div class="no-faq-icon">💡</div>
-              <h3>No generic Q&As yet</h3>
-              <p>Add documents or web links in Settings,<br>then click Generate Answers.</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # ── Tab 3: WhatsApp Q&As ──────────────────────────────────────
-    with tab_wa:
-        wa_chats = st.session_state.get("kb_whatsapp", [])
-
-        # WA chats info panel
-        if wa_chats:
-            wa_cards = ""
-            for w in wa_chats:
-                meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
-                if not meta.get("valid"):
-                    continue
-                plist = " · ".join(meta.get("participants", [])[:3])
-                if len(meta.get("participants", [])) > 3:
-                    plist += f" +{len(meta['participants'])-3}"
-                wa_cards += (
-                    f'<div class="wa-chat-card">'
-                    f'<div class="wa-chat-top"><span class="wa-chat-icon">💬</span>'
-                    f'<span class="wa-chat-name">{w["name"]}</span>'
-                    f'<span class="wa-chat-badge">{meta.get("total",0):,} msgs</span></div>'
-                    f'<div class="wa-chat-meta">👥 {plist} &nbsp;·&nbsp; 📅 {meta.get("date_range","")}</div>'
-                    + (f'<div class="wa-chat-qa">✦ {len(wa_faqs)} answers across {len(wa_cats)} categories</div>'
-                       if wa_faqs else '')
-                    + '</div>'
-                )
-            if wa_cards:
-                st.markdown(
-                    f'<div class="wa-panel"><div class="wa-panel-title">💬 WhatsApp Chats in Knowledge Base</div>'
-                    f'<div class="wa-cards-row">{wa_cards}</div></div>',
+            def _progress(pct, label):
+                prog_ph.progress(pct)
+                status_ph.markdown(
+                    f"<span style='color:#A78BFA;font-size:0.85rem'>{label}</span>",
                     unsafe_allow_html=True,
                 )
 
-        if wa_faqs:
-            _render_faq_list(wa_faqs, "wa", "search_wa")
-        else:
-            st.markdown("""
-            <div class="no-faq">
-              <div class="no-faq-icon">💬</div>
-              <h3>No WhatsApp Q&As yet</h3>
-              <p>Upload a WhatsApp export in Settings,<br>then click Generate Answers.</p>
-            </div>
-            """, unsafe_allow_html=True)
+            try:
+                new_faqs = generate_faqs(progress_cb=_progress)
+                prog_ph.progress(1.0)
+                if new_faqs:
+                    st.session_state.kb_faqs = new_faqs
+                    save_kb()
+                    prog_ph.empty()
+                    n_cats = len(set(f["category"] for f in new_faqs))
+                    status_ph.success(
+                        f"✅ {len(new_faqs)} answers generated across {n_cats} categories — saved to Answer Studio!"
+                    )
+                    st.rerun()
+                else:
+                    prog_ph.empty()
+                    status_ph.warning("No answers extracted. Try adding more content.")
+            except Exception as e:
+                prog_ph.empty()
+                status_ph.error(f"Error: {e}")
 
-    # ── Floating Chat Button ──────────────────────────────────────
-    st.markdown("""
-    <a href="?nav=chat" class="chat-fab" title="Open AI Chat">💬</a>
-    <span class="chat-fab-tooltip">AI Chat</span>
-    """, unsafe_allow_html=True)
+        # ── 3-Tab layout ──────────────────────────────────────────────
+        tab_faq, tab_generic, tab_wa = st.tabs([
+            f"📋  FAQ  ({len(faq_curated)})",
+            f"💡  Q&A  ({len(generic_faqs)})",
+            f"💬  WhatsApp  ({len(wa_faqs)})",
+        ])
+
+        # ── Tab 1: Curated Convin Sense FAQ ───────────────────────────
+        with tab_faq:
+            if faq_curated:
+                st.markdown(
+                    "<div style='font-size:0.78rem;color:#9CA3AF;margin-bottom:16px'>"
+                    "Curated Q&amp;As about <b style='color:#A78BFA'>Convin Sense</b> — "
+                    "product features, capabilities, pricing &amp; how it works.</div>",
+                    unsafe_allow_html=True,
+                )
+                _render_faq_list(faq_curated, "faq", "search_faq")
+            elif faqs:
+                st.markdown("""
+                <div class="no-faq">
+                  <div class="no-faq-icon">✦</div>
+                  <h3>No Convin Sense FAQs found</h3>
+                  <p>Regenerate answers after adding the Convin product docs or pages.</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <div class="no-faq">
+                  <div class="no-faq-icon">✦</div>
+                  <h3>Answer Studio is empty</h3>
+                  <p>Load at least one source in Settings,<br>
+                     then click <b>✨ Generate Answers</b> above.</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ── Tab 2: Full generic Q&A (docs + web) ─────────────────────
+        with tab_generic:
+            if generic_faqs:
+                st.markdown(
+                    "<div style='font-size:0.78rem;color:#9CA3AF;margin-bottom:16px'>"
+                    "All Q&amp;As extracted from <b style='color:#A78BFA'>documents</b> and "
+                    "<b style='color:#A78BFA'>web pages</b> — covering every topic and category.</div>",
+                    unsafe_allow_html=True,
+                )
+                _render_faq_list(generic_faqs, "generic", "search_generic")
+            else:
+                st.markdown("""
+                <div class="no-faq">
+                  <div class="no-faq-icon">💡</div>
+                  <h3>No generic Q&As yet</h3>
+                  <p>Add documents or web links in Settings,<br>then click Generate Answers.</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # ── Tab 3: WhatsApp Q&As ──────────────────────────────────────
+        with tab_wa:
+            wa_chats = st.session_state.get("kb_whatsapp", [])
+            if wa_chats:
+                wa_cards = ""
+                for w in wa_chats:
+                    meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
+                    if not meta.get("valid"):
+                        continue
+                    plist = " · ".join(meta.get("participants", [])[:3])
+                    if len(meta.get("participants", [])) > 3:
+                        plist += f" +{len(meta['participants'])-3}"
+                    wa_cards += (
+                        f'<div class="wa-chat-card">'
+                        f'<div class="wa-chat-top"><span class="wa-chat-icon">💬</span>'
+                        f'<span class="wa-chat-name">{w["name"]}</span>'
+                        f'<span class="wa-chat-badge">{meta.get("total",0):,} msgs</span></div>'
+                        f'<div class="wa-chat-meta">👥 {plist} &nbsp;·&nbsp; 📅 {meta.get("date_range","")}</div>'
+                        + (f'<div class="wa-chat-qa">✦ {len(wa_faqs)} answers across {len(wa_cats)} categories</div>'
+                           if wa_faqs else '')
+                        + '</div>'
+                    )
+                if wa_cards:
+                    st.markdown(
+                        f'<div class="wa-panel"><div class="wa-panel-title">💬 WhatsApp Chats in Knowledge Base</div>'
+                        f'<div class="wa-cards-row">{wa_cards}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+            if wa_faqs:
+                _render_faq_list(wa_faqs, "wa", "search_wa")
+            else:
+                st.markdown("""
+                <div class="no-faq">
+                  <div class="no-faq-icon">💬</div>
+                  <h3>No WhatsApp Q&As yet</h3>
+                  <p>Upload a WhatsApp export in Settings,<br>then click Generate Answers.</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # ── Chat panel (right column when open) ───────────────────────
+    if chat_open:
+        with chat_col:
+            _render_mini_chat()
+
+    # ── FAB — only when panel is closed ───────────────────────────
+    if not chat_open:
+        st.markdown("""
+        <a href="?nav=chat" class="chat-fab" title="Open AI Chat">💬</a>
+        <span class="chat-fab-tooltip">AI Chat</span>
+        """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════
