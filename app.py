@@ -1552,9 +1552,9 @@ def render_chat():
             <div class="welcome-card">
               <div class="welcome-icon">✦</div>
               <div class="welcome-eyebrow">Convin Klaro</div>
-              <div class="welcome-title">Ask anything. <span>Get instant answers.</span></div>
+              <div class="welcome-title">Hi, I'm Animesh. <span>How may I help you?</span></div>
               <div class="welcome-sub">
-                AI-powered knowledge &amp; support intelligence — searches all your docs, web pages &amp; chats.
+                Ask me anything — I'll search across all your docs, web pages &amp; chats to find the answer.
               </div>
               {stats_html}
               {ready_badge}
