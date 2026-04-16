@@ -2043,8 +2043,16 @@ def render_settings():
 # Categories that are specifically about the Convin Sense product.
 # Only these appear in the curated FAQ tab.
 _CONVIN_FAQ_CATS = {
+    # Core platform
     "Convin Platform",
     "AI Phone Calls",
+    "AI Phone Call Agent",
+    "Real-Time Assist Agent",
+    "Conversation Intelligence",
+    "Auto QA",
+    "Convin Insights",
+    "Convin LMS",
+    # Product descriptions
     "Core Capabilities",
     "Core Features",
     "Product Overview",
@@ -2052,6 +2060,7 @@ _CONVIN_FAQ_CATS = {
     "How It Works",
     "Key Value Propositions",
     "Getting Started",
+    # Business & trust
     "Integrations",
     "Data Security",
     "Human-in-the-Loop",
@@ -2062,6 +2071,14 @@ _CONVIN_FAQ_CATS = {
     "Trust & Reputation",
     "Call Quality & QA",
     "Definitions & Concepts",
+    "Company & Background",
+    "Pricing & Plans",
+    # Use cases
+    "Sales Use Case",
+    "Collections Use Case",
+    "Compliance Use Case",
+    "Lead Qualification",
+    "Customer Retention",
 }
 # Max Q&As shown per category in the FAQ tab to keep it concise
 _FAQ_CAP_PER_CAT = 5
