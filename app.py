@@ -1202,7 +1202,7 @@ def render_topnav(show_settings_btn=True, show_back_btn=False):
                     st.rerun()
         if show_settings_btn:
             with c_faq:
-                if st.button("❓ FAQs", key="faq_nav_btn", type="secondary",
+                if st.button("✦ Answer Studio", key="faq_nav_btn", type="secondary",
                              use_container_width=True):
                     st.session_state.page = "faq"
                     st.rerun()
@@ -1611,8 +1611,8 @@ def render_faq():
     st.markdown(f"""
     <div class="faq-hero">
       <div class="faq-hero-left">
-        <h2>❓ FAQ Builder</h2>
-        <p>Auto-generated Q&amp;A from your entire knowledge base — always up to date</p>
+        <h2>✦ Answer Studio</h2>
+        <p>Auto-generated answers from your entire knowledge base — always up to date</p>
       </div>
       <div class="faq-stat-row">
         <div class="faq-stat-box"><div class="n">{len(faqs)}</div><div class="l">Questions</div></div>
@@ -1626,11 +1626,11 @@ def render_faq():
     ab1, ab2, ab3, ab4 = st.columns([3, 2, 2, 2])
     with ab1:
         gen_btn = st.button(
-            "✨ Generate FAQs" if not faqs else "🔄 Regenerate FAQs",
+            "✨ Generate Answers" if not faqs else "🔄 Regenerate Answers",
             type="primary", use_container_width=True, disabled=(total == 0),
         )
     with ab2:
-        if faqs and st.button("🗑️ Clear FAQs", use_container_width=True):
+        if faqs and st.button("🗑️ Clear All", use_container_width=True):
             st.session_state.kb_faqs = []
             save_kb(); st.rerun()
     with ab3:
@@ -1638,7 +1638,7 @@ def render_faq():
             st.download_button(
                 "⬇️ Export JSON",
                 data=json.dumps(faqs, indent=2, ensure_ascii=False),
-                file_name="faqs.json", mime="application/json",
+                file_name="answer-studio.json", mime="application/json",
                 use_container_width=True,
             )
     with ab4:
@@ -1650,7 +1650,7 @@ def render_faq():
                     lines += [f"Q{idx}. {faq['question']}", f"A:  {faq['answer']}\n"]
             st.download_button(
                 "⬇️ Export TXT",
-                data="\n".join(lines), file_name="faqs.txt", mime="text/plain",
+                data="\n".join(lines), file_name="answer-studio.txt", mime="text/plain",
                 use_container_width=True,
             )
 
@@ -1670,7 +1670,7 @@ def render_faq():
         status_ph.markdown(
             f"<span style='color:#818cf8;font-size:0.85rem'>"
             f"🤖 Running {passes} extraction pass(es) across all sources — "
-            f"extracting maximum Q&amp;As…</span>",
+            f"building your Answer Studio…</span>",
             unsafe_allow_html=True,
         )
         prog_ph.progress(0.05)
@@ -1691,12 +1691,12 @@ def render_faq():
                 prog_ph.empty()
                 n_cats = len(set(f["category"] for f in new_faqs))
                 status_ph.success(
-                    f"✅ {len(new_faqs)} FAQs extracted across {n_cats} categories — saved!"
+                    f"✅ {len(new_faqs)} answers generated across {n_cats} categories — saved to Answer Studio!"
                 )
                 st.rerun()
             else:
                 prog_ph.empty()
-                status_ph.warning("No FAQs extracted. Try adding more content.")
+                status_ph.warning("No answers extracted. Try adding more content.")
         except Exception as e:
             prog_ph.empty()
             status_ph.error(f"Error: {e}")
@@ -1789,10 +1789,10 @@ def render_faq():
     else:
         st.markdown("""
         <div class="no-faq">
-          <div class="no-faq-icon">📋</div>
-          <h3>No FAQs generated yet</h3>
+          <div class="no-faq-icon">✦</div>
+          <h3>Answer Studio is empty</h3>
           <p>Load at least one source in Settings,<br>
-             then click <b>✨ Generate FAQs</b> above.</p>
+             then click <b>✨ Generate Answers</b> above.</p>
         </div>
         """, unsafe_allow_html=True)
 
