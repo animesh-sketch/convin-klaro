@@ -1829,10 +1829,36 @@ def render_settings():
 
 # ══════════════════════════════════════════════════════════════════
 #  FAQ PAGE  —  3-tab layout
-#  Tab 1: FAQ         — all Q&As (every source)
-#  Tab 2: Q&A         — generic only (docs + web, no WhatsApp)
-#  Tab 3: WhatsApp    — WhatsApp-extracted Q&As only
+#  Tab 1: FAQ       — curated Convin Sense product Q&As only
+#  Tab 2: Q&A       — all generic Q&As (docs + web, no WhatsApp)
+#  Tab 3: WhatsApp  — WhatsApp-extracted Q&As only
 # ══════════════════════════════════════════════════════════════════
+
+# Categories that are specifically about the Convin Sense product.
+# Only these appear in the curated FAQ tab.
+_CONVIN_FAQ_CATS = {
+    "Convin Platform",
+    "AI Phone Calls",
+    "Core Capabilities",
+    "Core Features",
+    "Product Overview",
+    "Platform Overview",
+    "How It Works",
+    "Key Value Propositions",
+    "Getting Started",
+    "Integrations",
+    "Data Security",
+    "Human-in-the-Loop",
+    "Business Value",
+    "Target Audience",
+    "Platform Positioning",
+    "Use Cases",
+    "Trust & Reputation",
+    "Call Quality & QA",
+    "Definitions & Concepts",
+}
+# Max Q&As shown per category in the FAQ tab to keep it concise
+_FAQ_CAP_PER_CAT = 5
 
 def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
     """Reusable search + category expanders for a subset of FAQs."""
@@ -1931,12 +1957,18 @@ def render_faq():
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
 
-    # Partition into generic (docs + web) and WhatsApp
+    # Partition into WhatsApp, generic, and curated Convin FAQ
     wa_faqs      = [f for f in faqs if f["category"].startswith("WhatsApp:")]
     generic_faqs = [f for f in faqs if not f["category"].startswith("WhatsApp:")]
 
-    all_cats     = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
-    wa_cats      = list(dict.fromkeys(f["category"] for f in wa_faqs))
+    # Curated FAQ: only product-specific categories, capped per category
+    faq_curated: list[dict] = []
+    for cat in _CONVIN_FAQ_CATS:
+        bucket = [f for f in faqs if f["category"] == cat]
+        faq_curated.extend(bucket[:_FAQ_CAP_PER_CAT])
+
+    all_cats = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
+    wa_cats  = list(dict.fromkeys(f["category"] for f in wa_faqs))
 
     # ── Hero ──────────────────────────────────────────────────────
     st.markdown(f"""
@@ -1946,8 +1978,8 @@ def render_faq():
         <p>Auto-generated answers from your entire knowledge base — always up to date</p>
       </div>
       <div class="faq-stat-row">
-        <div class="faq-stat-box"><div class="n">{len(faqs)}</div><div class="l">All Q&amp;As</div></div>
-        <div class="faq-stat-box"><div class="n">{len(generic_faqs)}</div><div class="l">Generic Q&amp;A</div></div>
+        <div class="faq-stat-box"><div class="n">{len(faq_curated)}</div><div class="l">FAQ</div></div>
+        <div class="faq-stat-box"><div class="n">{len(generic_faqs)}</div><div class="l">Q&amp;A</div></div>
         <div class="faq-stat-box"><div class="n">{len(wa_faqs)}</div><div class="l">WhatsApp Q&amp;A</div></div>
         <div class="faq-stat-box"><div class="n">{total}</div><div class="l">KB Sources</div></div>
       </div>
@@ -2035,15 +2067,30 @@ def render_faq():
 
     # ── 3-Tab layout ──────────────────────────────────────────────
     tab_faq, tab_generic, tab_wa = st.tabs([
-        f"📋  FAQ  ({len(faqs)})",
+        f"📋  FAQ  ({len(faq_curated)})",
         f"💡  Q&A  ({len(generic_faqs)})",
         f"💬  WhatsApp  ({len(wa_faqs)})",
     ])
 
-    # ── Tab 1: All FAQs ───────────────────────────────────────────
+    # ── Tab 1: Curated Convin Sense FAQ ───────────────────────────
     with tab_faq:
-        if faqs:
-            _render_faq_list(faqs, "all", "search_all")
+        if faq_curated:
+            st.markdown(
+                "<div style='font-size:0.78rem;color:#8D90AA;margin-bottom:16px'>"
+                "Curated Q&amp;As about <b style='color:#A78BFA'>Convin Sense</b> — "
+                "product features, capabilities, pricing &amp; how it works.</div>",
+                unsafe_allow_html=True,
+            )
+            _render_faq_list(faq_curated, "faq", "search_faq")
+        elif faqs:
+            # FAQs exist but none match the curated categories — show a hint
+            st.markdown("""
+            <div class="no-faq">
+              <div class="no-faq-icon">✦</div>
+              <h3>No Convin Sense FAQs found</h3>
+              <p>Regenerate answers after adding the Convin product docs or pages.</p>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.markdown("""
             <div class="no-faq">
@@ -2054,13 +2101,13 @@ def render_faq():
             </div>
             """, unsafe_allow_html=True)
 
-    # ── Tab 2: Generic Q&A (docs + web) ──────────────────────────
+    # ── Tab 2: Full generic Q&A (docs + web) ─────────────────────
     with tab_generic:
         if generic_faqs:
             st.markdown(
                 "<div style='font-size:0.78rem;color:#8D90AA;margin-bottom:16px'>"
-                "Answers extracted from <b style='color:#A78BFA'>documents</b> and "
-                "<b style='color:#A78BFA'>web pages</b> in your knowledge base.</div>",
+                "All Q&amp;As extracted from <b style='color:#A78BFA'>documents</b> and "
+                "<b style='color:#A78BFA'>web pages</b> — covering every topic and category.</div>",
                 unsafe_allow_html=True,
             )
             _render_faq_list(generic_faqs, "generic", "search_generic")
