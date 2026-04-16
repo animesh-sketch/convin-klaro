@@ -1430,6 +1430,21 @@ def build_context():
     return ctx[:MAX_CTX], names
 
 
+def build_chat_context() -> tuple[str, list[str]]:
+    """Compact FAQ-based context for chat — much faster than raw pages."""
+    parts, names = [], []
+    faqs = st.session_state.get("kb_faqs", [])
+    if faqs:
+        qa_lines = [f"Q: {f['question']}\nA: {f['answer']}" for f in faqs]
+        parts.append("=== KNOWLEDGE BASE ===\n" + "\n\n".join(qa_lines))
+        names.append(f"{len(faqs)} Q&A pairs")
+    for d in st.session_state.get("kb_documents", []):
+        parts.append(f"=== DOCUMENT: {d['name']} ===\n{d['content'][:6000]}")
+        names.append(d["name"])
+    ctx = "\n\n".join(parts)
+    return ctx[:180_000], names
+
+
 # ══════════════════════════════════════════════════════════════════
 #  CLAUDE  —  full context, prompt caching
 # ══════════════════════════════════════════════════════════════════
@@ -1491,6 +1506,52 @@ def ask_claude(query: str) -> tuple[str, list[str]]:
         extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
     )
     return r.content[0].text, names
+
+
+def ask_claude_stream(query: str, placeholder) -> tuple[str, list[str]]:
+    """Stream Claude response token-by-token into a Streamlit placeholder."""
+    ctx, names = build_chat_context()
+    if not ctx.strip():
+        msg = ("I don't have any knowledge base loaded yet. "
+               "Please ask your admin to add documents or resources.")
+        placeholder.markdown(msg)
+        return msg, []
+
+    SYSTEM = (
+        "You are Animesh, a professional support AI for Convin Sense.\n"
+        "• Answer ONLY from the knowledge base — never fabricate facts.\n"
+        "• Be concise and direct. Use **bold** for key terms and product names.\n"
+        "• If the answer is not in the knowledge base respond with: "
+        "\"This might need further verification — let me connect you with the right person from our team.\"\n"
+        "• For WhatsApp citations use: > 💬 [Name] on [Date]\n"
+    )
+    system = [
+        {"type": "text", "text": SYSTEM},
+        {"type": "text", "text": "KNOWLEDGE BASE:\n" + ctx,
+         "cache_control": {"type": "ephemeral"}},
+    ]
+    history = [{"role": m["role"], "content": m["content"]}
+               for m in st.session_state.chat_history[-6:]]
+    history.append({"role": "user", "content": query})
+
+    full_text = ""
+    try:
+        with get_client().messages.stream(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=system,
+            messages=history,
+            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+        ) as stream:
+            for text in stream.text_stream:
+                full_text += text
+                placeholder.markdown(full_text + " ▌")
+        placeholder.markdown(full_text)
+    except Exception as e:
+        full_text = f"Something went wrong — please try again. *(Error: {e})*"
+        placeholder.markdown(full_text)
+
+    return full_text, names
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1872,6 +1933,8 @@ def render_chat():
 
         # Scroll anchor
         st.markdown("<div id='chat-end'></div>", unsafe_allow_html=True)
+        # Streaming response renders here while generating
+        stream_ph = st.empty()
         st.markdown("<div style='height:130px'></div>", unsafe_allow_html=True)
 
     # ── Fixed input bar
@@ -1899,12 +1962,7 @@ def render_chat():
         st.session_state.chat_history.append(
             {"role": "user", "content": active, "ts": ts_now}
         )
-        with st.spinner(""):
-            try:
-                answer, sources = ask_claude(active)
-            except Exception as e:
-                answer  = f"Something went wrong — please try again. *(Error: {e})*"
-                sources = []
+        answer, sources = ask_claude_stream(active, stream_ph)
         st.session_state.chat_history.append(
             {"role": "assistant", "content": answer, "ts": ts_now, "sources": sources}
         )
@@ -2196,6 +2254,33 @@ def render_settings():
             save_kb()
 
         st.markdown("---")
+        st.markdown("**Export knowledge base**")
+        _exp_faqs = st.session_state.get("kb_faqs", [])
+        if _exp_faqs:
+            _exp_cats = sorted(set(f["category"] for f in _exp_faqs))
+            ex1, ex2 = st.columns(2)
+            with ex1:
+                st.download_button(
+                    "⬇️ Export JSON",
+                    data=json.dumps(_exp_faqs, indent=2, ensure_ascii=False),
+                    file_name="answer-studio.json", mime="application/json",
+                    use_container_width=True,
+                )
+            with ex2:
+                _lines = []
+                for _cat in _exp_cats:
+                    _lines += [f"\n{'='*50}", f"  {_cat.upper()}", f"{'='*50}\n"]
+                    for _idx, _faq in enumerate([f for f in _exp_faqs if f["category"] == _cat], 1):
+                        _lines += [f"Q{_idx}. {_faq['question']}", f"A:  {_faq['answer']}\n"]
+                st.download_button(
+                    "⬇️ Export TXT",
+                    data="\n".join(_lines), file_name="answer-studio.txt", mime="text/plain",
+                    use_container_width=True,
+                )
+        else:
+            st.caption("Generate answers first to enable exports.")
+
+        st.markdown("---")
         st.markdown("**Danger zone**")
         if st.button("🗑️  Clear entire knowledge base", type="secondary"):
             for k in KB_KEYS:
@@ -2405,32 +2490,26 @@ def _render_mini_chat():
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # ── Input
-    pre = st.session_state.get("quick_q", "")
-    user_input = st.text_input(
-        "q", placeholder="Ask a question…",
-        label_visibility="collapsed",
-        key="mini_chat_input",
-        value=pre,
-    )
-    if pre:
-        st.session_state.quick_q = ""
-    send = st.button("Send →", key="mini_chat_send", type="primary", use_container_width=True)
+    # ── Streaming placeholder (visible while generating)
+    stream_ph = st.empty()
 
-    active = user_input.strip()
-    if (send or active) and active and active != st.session_state.get("_mini_last", ""):
-        st.session_state["_mini_last"] = active
+    # ── Input — st.chat_input handles Enter natively, no button needed
+    user_input = st.chat_input("Ask a question…", key="mini_chat_input")
+
+    # Handle quick_q (suggestion chips)
+    if not user_input and st.session_state.get("quick_q"):
+        user_input = st.session_state.quick_q
+        st.session_state.quick_q = ""
+
+    if user_input and user_input.strip():
+        active = user_input.strip()
         ts_now = datetime.now().strftime("%H:%M")
         st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts_now})
-        with st.spinner(""):
-            try:
-                answer, sources = ask_claude(active)
-            except Exception as e:
-                answer = f"Something went wrong — please try again. *(Error: {e})*"
-                sources = []
+        answer, sources = ask_claude_stream(active, stream_ph)
         st.session_state.chat_history.append(
             {"role": "assistant", "content": answer, "ts": ts_now, "sources": sources}
         )
+        st.session_state["_mini_last"] = active
         st.rerun()
 
     if st.button("🗑 Clear chat", key="mini_clear_chat", type="secondary", use_container_width=True):
@@ -2492,7 +2571,7 @@ def render_faq():
         )
 
         # ── Action bar ────────────────────────────────────────────────
-        ab1, ab2, ab3, ab4 = st.columns([3, 2, 2, 2])
+        ab1, ab2 = st.columns([3, 2])
         with ab1:
             gen_btn = st.button(
                 "✨ Generate Answers" if not faqs else "🔄 Regenerate Answers",
@@ -2502,27 +2581,6 @@ def render_faq():
             if faqs and st.button("🗑️ Clear All", use_container_width=True):
                 st.session_state.kb_faqs = []
                 save_kb(); st.rerun()
-        with ab3:
-            if faqs:
-                st.download_button(
-                    "⬇️ Export JSON",
-                    data=json.dumps(faqs, indent=2, ensure_ascii=False),
-                    file_name="answer-studio.json", mime="application/json",
-                    use_container_width=True,
-                )
-        with ab4:
-            if faqs:
-                lines = []
-                for cat in all_cats:
-                    lines += [f"\n{'='*50}", f"  {cat.upper()}", f"{'='*50}\n"]
-                    for idx, faq in enumerate([f for f in faqs if f["category"] == cat], 1):
-                        lines += [f"Q{idx}. {faq['question']}", f"A:  {faq['answer']}\n"]
-                st.download_button(
-                    "⬇️ Export TXT",
-                    data="\n".join(lines), file_name="answer-studio.txt", mime="text/plain",
-                    use_container_width=True,
-                )
-
         if total == 0:
             st.info("Add documents or links from Settings first, then click Generate.")
 
