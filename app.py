@@ -4,7 +4,7 @@ AI-powered knowledge & support intelligence platform
 """
 
 import streamlit as st
-import json, re, os, base64
+import json, re, os, base64, zipfile, io
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import anthropic
@@ -789,20 +789,49 @@ def _ext(filename): return filename.lower().rsplit(".", 1)[-1] if "." in filenam
 
 def FILE_ICON(ext):
     return {
-        "pdf":"📄","txt":"📝","md":"📝","docx":"📋","doc":"📋",
-        "xlsx":"📊","xls":"📊","csv":"📊","pptx":"🖼️","ppt":"🖼️",
-        "json":"🗂️","yaml":"🗂️","html":"🌐","epub":"📚","eml":"📧",
-        "py":"🐍","js":"📜","sql":"🗄️",
+        "pdf":"📄","txt":"📝","md":"📝","docx":"📋","doc":"📋","odt":"📋",
+        "xlsx":"📊","xls":"📊","xlsm":"📊","ods":"📊","csv":"📊",
+        "pptx":"🖼️","ppt":"🖼️","odp":"🖼️",
+        "html":"🌐","htm":"🌐","mhtml":"🌐","xhtml":"🌐",
+        "json":"🗂️","jsonl":"🗂️","yaml":"🗂️","xml":"🗂️",
+        "epub":"📚","rtf":"📄","eml":"📧","msg":"📧",
+        "ipynb":"📓","py":"🐍","js":"📜","ts":"📜","sql":"🗄️",
+        "sh":"⚙️","rb":"💎","go":"🐹","rs":"⚙️","java":"☕",
     }.get(ext, "📎")
 
 def parse_file(f) -> str:
     import io
     name = f.name.lower(); raw = f.read(); ext = _ext(name)
-    TEXT = {"txt","md","markdown","rst","log","csv","tsv","yaml","yml","toml","ini","cfg",
-            "env","sh","py","js","ts","jsx","tsx","html","htm","xml","json","jsonl","sql",
-            "r","rb","php","java","cpp","c","h","go","rs","swift","kt","cs","lua","tex"}
-    if ext in TEXT:
+
+    # ── Plain-text formats (direct decode) ───────────────────────
+    PLAIN_TEXT = {
+        "txt","md","markdown","rst","log","csv","tsv",
+        "yaml","yml","toml","ini","cfg","env",
+        "sh","bash","zsh","fish",
+        "py","js","ts","jsx","tsx","mjs","cjs",
+        "json","jsonl","ndjson",
+        "sql","r","rb","php","java","cpp","c","h","hpp",
+        "go","rs","swift","kt","cs","lua","tex","scala","pl",
+        "xml","svg","rss","atom",
+    }
+    if ext in PLAIN_TEXT:
         return raw.decode("utf-8", errors="ignore")
+
+    # ── HTML / HTM — strip tags, keep readable text ───────────────
+    if ext in ("html","htm","mhtml","mht","xhtml"):
+        try:
+            from bs4 import BeautifulSoup as BS
+            soup = BS(raw.decode("utf-8","ignore"), "html.parser")
+            for tag in soup(["script","style","nav","footer","header",
+                             "aside","noscript","meta","link"]):
+                tag.decompose()
+            title = soup.title.string.strip() if soup.title else ""
+            text  = soup.get_text("\n", strip=True)
+            return (f"[Title: {title}]\n\n" if title else "") + text
+        except Exception as e:
+            return raw.decode("utf-8","ignore")
+
+    # ── PDF ───────────────────────────────────────────────────────
     if ext == "pdf":
         try:
             import pdfplumber
@@ -814,7 +843,9 @@ def parse_file(f) -> str:
                 r = PyPDF2.PdfReader(io.BytesIO(raw))
                 return "\n\n".join(p.extract_text() or "" for p in r.pages)
             except Exception as e: return f"[PDF error: {e}]"
-    if ext in ("docx","doc"):
+
+    # ── Word ──────────────────────────────────────────────────────
+    if ext in ("docx","doc","odt"):
         try:
             import docx
             d = docx.Document(io.BytesIO(raw))
@@ -824,19 +855,23 @@ def parse_file(f) -> str:
                     parts.append(" | ".join(c.text for c in row.cells))
             return "\n".join(parts)
         except Exception as e: return f"[DOCX error: {e}]"
-    if ext in ("xlsx","xls","xlsm"):
+
+    # ── Excel ─────────────────────────────────────────────────────
+    if ext in ("xlsx","xls","xlsm","ods"):
         try:
             import openpyxl
             wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
             parts = []
             for sn in wb.sheetnames:
-                ws = wb[sn]; parts.append(f"=== {sn} ===")
+                ws = wb[sn]; parts.append(f"=== Sheet: {sn} ===")
                 for row in ws.iter_rows(values_only=True):
                     s = " | ".join(str(c) for c in row if c is not None)
                     if s.strip(): parts.append(s)
             return "\n".join(parts)
         except Exception as e: return f"[Excel error: {e}]"
-    if ext in ("pptx","ppt"):
+
+    # ── PowerPoint ────────────────────────────────────────────────
+    if ext in ("pptx","ppt","odp"):
         try:
             from pptx import Presentation
             prs = Presentation(io.BytesIO(raw)); parts = []
@@ -846,6 +881,15 @@ def parse_file(f) -> str:
                     if hasattr(sh,"text") and sh.text.strip(): parts.append(sh.text)
             return "\n".join(parts)
         except Exception as e: return f"[PPTX error: {e}]"
+
+    # ── RTF ───────────────────────────────────────────────────────
+    if ext == "rtf":
+        try:
+            from striprtf.striprtf import rtf_to_text
+            return rtf_to_text(raw.decode("utf-8","ignore"))
+        except Exception as e: return f"[RTF error: {e}]"
+
+    # ── EPUB ──────────────────────────────────────────────────────
     if ext == "epub":
         try:
             import ebooklib; from ebooklib import epub; from bs4 import BeautifulSoup as BS
@@ -856,16 +900,48 @@ def parse_file(f) -> str:
                 if t: parts.append(t)
             return "\n\n".join(parts)
         except Exception as e: return f"[EPUB error: {e}]"
-    if ext == "eml":
+
+    # ── Email (.eml / .msg) ───────────────────────────────────────
+    if ext in ("eml","msg"):
         try:
             import email
             msg = email.message_from_bytes(raw)
-            parts = [f"From: {msg['From']}", f"Subject: {msg['Subject']}", ""]
+            parts = []
+            for hdr in ("From","To","Subject","Date"):
+                if msg.get(hdr): parts.append(f"{hdr}: {msg[hdr]}")
+            parts.append("")
             for part in msg.walk():
-                if part.get_content_type() == "text/plain":
+                ct = part.get_content_type()
+                if ct == "text/plain":
                     parts.append(part.get_payload(decode=True).decode("utf-8","ignore"))
+                elif ct == "text/html":
+                    try:
+                        from bs4 import BeautifulSoup as BS
+                        parts.append(BS(part.get_payload(decode=True),"html.parser").get_text("\n",strip=True))
+                    except Exception:
+                        pass
             return "\n".join(parts)
         except Exception as e: return f"[EML error: {e}]"
+
+    # ── Notebook (.ipynb) ─────────────────────────────────────────
+    if ext == "ipynb":
+        try:
+            nb = json.loads(raw.decode("utf-8","ignore"))
+            parts = []
+            for cell in nb.get("cells",[]):
+                ct = cell.get("cell_type","")
+                src = "".join(cell.get("source",[]))
+                if ct == "markdown":
+                    parts.append(src)
+                elif ct == "code":
+                    parts.append(f"```python\n{src}\n```")
+                for out in cell.get("outputs",[]):
+                    text = "".join(out.get("text",""))
+                    if text: parts.append(text)
+            return "\n\n".join(parts)
+        except Exception as e: return f"[IPYNB error: {e}]"
+
+    # ── Fallback: try raw text decode ─────────────────────────────
     for enc in ("utf-8","latin-1","cp1252"):
         try: return raw.decode(enc)
         except: continue
@@ -1540,7 +1616,7 @@ def render_settings():
 
     # ── Documents ──────────────────────────────────────────────────
     with t1:
-        st.caption("Upload any file format — PDF, DOCX, XLSX, PPTX, TXT, CSV, JSON, code files, and more.")
+        st.caption("Supported: PDF · DOCX · XLSX · PPTX · HTML · TXT · CSV · JSON · RTF · EPUB · EML · Jupyter (.ipynb) · code files · and more.")
         ups = st.file_uploader(
             "upload_docs", accept_multiple_files=True,
             key="doc_uploader", label_visibility="collapsed",
@@ -1626,13 +1702,14 @@ def render_settings():
         st.markdown("""
         <div style='background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);
         border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:0.82rem;color:#86EFAC'>
-        📱 <b>How to export:</b> Open WhatsApp → Chat → ⋮ / ⋯ → More → Export Chat → Without Media → share the <code>.txt</code> file here.
+        📱 <b>How to export:</b> Open WhatsApp → Chat → ⋮ / ⋯ → More → Export Chat → share the <code>.txt</code> or <code>.zip</code> file here.
         </div>
         """, unsafe_allow_html=True)
 
         wa_up = st.file_uploader(
             "wa_upload", accept_multiple_files=True,
-            type=["txt"], key="wa_uploader", label_visibility="collapsed",
+            type=["txt", "zip", "pdf", "docx", "doc", "xlsx", "xls", "csv", "pptx", "ppt", "png", "jpg", "jpeg", "webp", "gif", "mp4", "mp3", "ogg", "opus", "aac", "wav", "json"],
+            key="wa_uploader", label_visibility="collapsed",
         )
         if wa_up:
             ex = {w["name"] for w in st.session_state.kb_whatsapp}
@@ -1640,7 +1717,37 @@ def render_settings():
             for f in wa_up:
                 if f.name in ex:
                     continue
-                raw = f.read().decode("utf-8", "ignore")
+
+                # Extract text from zip (WhatsApp export with media)
+                if f.name.lower().endswith(".zip"):
+                    try:
+                        with zipfile.ZipFile(io.BytesIO(f.read())) as zf:
+                            txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
+                            if not txt_files:
+                                skipped.append(f.name)
+                                continue
+                            raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
+                            display_name = f.name
+                    except Exception:
+                        skipped.append(f.name)
+                        continue
+                elif f.name.lower().endswith(".txt"):
+                    raw = f.read().decode("utf-8", "ignore")
+                    display_name = f.name
+                else:
+                    # Non-text files: store as attachment reference
+                    b64 = base64.b64encode(f.read()).decode()
+                    st.session_state.kb_whatsapp.append({
+                        "name": f.name, "content": f"[Attached file: {f.name}]",
+                        "added_at": datetime.now().isoformat(),
+                        "size": f.size,
+                        "meta": {"valid": True, "total": 0, "participants": [], "date_range": "", "is_attachment": True},
+                        "attachment_data": b64,
+                        "attachment_mime": f.type or "application/octet-stream",
+                    })
+                    added += 1
+                    continue
+
                 parsed = parse_wa(raw)
                 meta   = parse_wa_meta(parsed)
 
@@ -1650,7 +1757,7 @@ def render_settings():
                     continue
 
                 st.session_state.kb_whatsapp.append({
-                    "name": f.name, "content": parsed,
+                    "name": display_name, "content": parsed,
                     "added_at": datetime.now().isoformat(),
                     "size": len(parsed),
                     "meta": meta,
@@ -1659,7 +1766,7 @@ def render_settings():
 
             if added:
                 save_kb()
-                st.success(f"✅ {added} chat(s) added and parsed.")
+                st.success(f"✅ {added} file(s) added.")
             if skipped:
                 st.warning(f"⚠️ {', '.join(skipped)} — doesn't look like a WhatsApp export (no messages found).")
 
