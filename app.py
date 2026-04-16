@@ -685,22 +685,11 @@ div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn"]) .stButton >
 
 
 # ══════════════════════════════════════════════════════════════════
-#  STORAGE  —  Supabase primary, local JSON fallback
+#  STORAGE  —  Streamlit-native JSON file (kb_store.json)
 # ══════════════════════════════════════════════════════════════════
-def _get_supabase():
-    """Return a Supabase client, or None if credentials are missing."""
-    url = st.secrets.get("SUPABASE_URL", "") or os.getenv("SUPABASE_URL", "")
-    key = st.secrets.get("SUPABASE_KEY", "") or os.getenv("SUPABASE_KEY", "")
-    if not url or not key:
-        return None
-    try:
-        from supabase import create_client
-        return create_client(url, key)
-    except Exception:
-        return None
-
-# ── JSON fallback helpers ─────────────────────────────────────────
-def _load_kb_json():
+def load_kb():
+    if st.session_state.get("_kb_loaded"):
+        return
     if os.path.exists(KB_FILE):
         try:
             with open(KB_FILE, "r", encoding="utf-8") as f:
@@ -710,119 +699,13 @@ def _load_kb_json():
             st.session_state["show_sources"] = d.get("show_sources", False)
         except Exception:
             pass
+    st.session_state["_kb_loaded"] = True
 
-def _save_kb_json():
+def save_kb():
     data = {k: st.session_state.get(k, []) for k in KB_KEYS}
     data["show_sources"] = st.session_state.get("show_sources", False)
     with open(KB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
-# ── Supabase helpers ──────────────────────────────────────────────
-_SB_TYPE_MAP = [
-    ("document",  "kb_documents", "name"),
-    ("link",      "kb_links",     "url"),
-    ("whatsapp",  "kb_whatsapp",  "name"),
-    ("crawled",   "kb_crawled",   "url"),
-]
-
-def _row_to_doc(r):
-    return {"name": r.get("name",""), "content": r.get("content",""),
-            "type": r.get("file_type",""), "added_at": r.get("added_at",""),
-            "size": r.get("size", 0)}
-
-def _row_to_link(r):
-    return {"url": r.get("url",""), "title": r.get("title",""),
-            "content": r.get("content",""), "added_at": r.get("added_at",""),
-            "size": r.get("size", 0)}
-
-def _row_to_wa(r):
-    return {"name": r.get("name",""), "content": r.get("content",""),
-            "added_at": r.get("added_at",""), "size": r.get("size", 0)}
-
-def _row_to_crawled(r):
-    return {"url": r.get("url",""), "title": r.get("title",""),
-            "content": r.get("content",""), "added_at": r.get("added_at",""),
-            "size": r.get("size", 0)}
-
-_ROW_CONVERTERS = {
-    "document": _row_to_doc,
-    "link":     _row_to_link,
-    "whatsapp": _row_to_wa,
-    "crawled":  _row_to_crawled,
-}
-
-def load_kb():
-    if st.session_state.get("_kb_loaded"):
-        return
-    sb = _get_supabase()
-    if sb:
-        try:
-            # Load all sources
-            rows = sb.table("kb_sources").select("*").order("added_at").execute().data or []
-            for stype, key, _ in _SB_TYPE_MAP:
-                converter = _ROW_CONVERTERS[stype]
-                st.session_state[key] = [converter(r) for r in rows if r.get("source_type") == stype]
-
-            # Load FAQs
-            faq_rows = sb.table("kb_faqs").select("*").order("created_at").execute().data or []
-            st.session_state["kb_faqs"] = [
-                {"category": r["category"], "question": r["question"], "answer": r["answer"]}
-                for r in faq_rows
-            ]
-
-            # Load preferences
-            prefs = {r["key"]: r["value"]
-                     for r in (sb.table("kb_preferences").select("*").execute().data or [])}
-            st.session_state["show_sources"] = prefs.get("show_sources", "false").lower() == "true"
-
-        except Exception:
-            _load_kb_json()
-    else:
-        _load_kb_json()
-    st.session_state["_kb_loaded"] = True
-
-def save_kb():
-    sb = _get_supabase()
-    if sb:
-        try:
-            # Sync each source type (delete-then-insert for simplicity)
-            for stype, key, _ in _SB_TYPE_MAP:
-                sb.table("kb_sources").delete().eq("source_type", stype).execute()
-                items = st.session_state.get(key, [])
-                if items:
-                    records = []
-                    for item in items:
-                        records.append({
-                            "source_type": stype,
-                            "name":      item.get("name",  item.get("title", "")),
-                            "url":       item.get("url",   ""),
-                            "title":     item.get("title", item.get("name", "")),
-                            "content":   item.get("content", ""),
-                            "file_type": item.get("type",  ""),
-                            "size":      item.get("size",  0),
-                            "added_at":  item.get("added_at", datetime.now().isoformat()),
-                        })
-                    sb.table("kb_sources").insert(records).execute()
-
-            # Sync FAQs (delete all, re-insert)
-            sb.table("kb_faqs").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
-            faqs = st.session_state.get("kb_faqs", [])
-            if faqs:
-                sb.table("kb_faqs").insert([
-                    {"category": f["category"], "question": f["question"], "answer": f["answer"]}
-                    for f in faqs
-                ]).execute()
-
-            # Sync preferences
-            sb.table("kb_preferences").upsert({
-                "key": "show_sources",
-                "value": str(st.session_state.get("show_sources", False)).lower(),
-            }).execute()
-
-        except Exception:
-            _save_kb_json()   # graceful fallback
-    else:
-        _save_kb_json()
 
 def kb_stats():
     docs  = len(st.session_state.get("kb_documents", []))

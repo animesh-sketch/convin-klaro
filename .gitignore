@@ -1,9 +1,6 @@
 # Streamlit secrets — never commit API keys
 .streamlit/secrets.toml
 
-# Local KB cache (data lives in Supabase now)
-kb_store.json
-
 # Logo / binary assets
 *.png
 *.jpg
