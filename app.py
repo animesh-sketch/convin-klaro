@@ -740,8 +740,60 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 
 /* Nav pill buttons */
 div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button,
-div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn"]) .stButton > button {
+div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn"]) .stButton > button,
+div[data-testid="stHorizontalBlock"]:has(button[key="chat_nav_btn"]) .stButton > button,
+div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn_faq"]) .stButton > button {
     border-radius: 20px !important;
+}
+
+/* ── Chat FAB (floating action button) ── */
+.chat-fab {
+    position: fixed;
+    bottom: 2.2rem;
+    right: 2.2rem;
+    z-index: 9999;
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366F1 0%, #22D3EE 100%);
+    box-shadow: 0 4px 22px rgba(99,102,241,0.50), 0 0 0 0 rgba(99,102,241,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; text-decoration: none; color: #fff;
+    transition: transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.22s ease;
+    animation: fab-pulse 3s ease-in-out infinite;
+}
+.chat-fab:hover {
+    transform: scale(1.12);
+    box-shadow: 0 8px 32px rgba(99,102,241,0.65);
+    color: #fff;
+    text-decoration: none;
+}
+.chat-fab-tooltip {
+    position: fixed;
+    bottom: 3.0rem;
+    right: 5.4rem;
+    z-index: 9998;
+    background: rgba(17,24,39,0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 10px;
+    padding: 6px 14px;
+    color: #E5E7EB;
+    font-size: 0.78rem;
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.chat-fab:hover ~ .chat-fab-tooltip {
+    opacity: 1;
+    transform: translateX(0);
+}
+@keyframes fab-pulse {
+    0%, 100% { box-shadow: 0 4px 22px rgba(99,102,241,0.50), 0 0 0 0 rgba(99,102,241,0.25); }
+    50%       { box-shadow: 0 4px 22px rgba(99,102,241,0.50), 0 0 0 8px rgba(99,102,241,0); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -785,7 +837,7 @@ def total_sources():
 #  SESSION STATE
 # ══════════════════════════════════════════════════════════════════
 _DEFAULTS = {
-    "page":          "chat",
+    "page":          "faq",
     "chat_history":  [],
     "_last_input":   "",
     "quick_q":       "",
@@ -799,6 +851,13 @@ for k, v in _DEFAULTS.items():
         st.session_state[k] = v
 
 load_kb()
+
+# Handle FAB / link navigation via query params (?nav=chat or ?nav=faq)
+if "nav" in st.query_params:
+    _nav_target = st.query_params["nav"]
+    st.query_params.clear()
+    if _nav_target in ("chat", "faq", "settings"):
+        st.session_state.page = _nav_target
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1390,7 +1449,7 @@ def generate_faqs(progress_cb=None) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════
 #  SHARED TOP NAV
 # ══════════════════════════════════════════════════════════════════
-def render_topnav(show_settings_btn=True, show_back_btn=False):
+def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False):
     docs, links, wa, pages = kb_stats()
     total = docs + links + wa + pages
     status_label = f"{total} sources loaded" if total else "No knowledge base"
@@ -1423,8 +1482,8 @@ def render_topnav(show_settings_btn=True, show_back_btn=False):
         c_l, c_faq, c_set = st.columns([7, 1, 1])
         if show_back_btn:
             with c_l:
-                if st.button("← Back to Chat", key="back_btn", type="secondary"):
-                    st.session_state.page = "chat"
+                if st.button("← Back to Answer Studio", key="back_btn", type="secondary"):
+                    st.session_state.page = "faq"
                     st.rerun()
         if show_settings_btn:
             with c_faq:
@@ -1434,6 +1493,17 @@ def render_topnav(show_settings_btn=True, show_back_btn=False):
                     st.rerun()
             with c_set:
                 if st.button("⚙ Settings", key="settings_btn", type="secondary",
+                             use_container_width=True):
+                    st.session_state.page = "settings"
+                    st.rerun()
+        if show_chat_btn:
+            with c_faq:
+                if st.button("💬 Chat", key="chat_nav_btn", type="secondary",
+                             use_container_width=True):
+                    st.session_state.page = "chat"
+                    st.rerun()
+            with c_set:
+                if st.button("⚙ Settings", key="settings_btn_faq", type="secondary",
                              use_container_width=True):
                     st.session_state.page = "settings"
                     st.rerun()
@@ -2012,7 +2082,7 @@ def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
 
 
 def render_faq():
-    render_topnav(show_settings_btn=False, show_back_btn=True)
+    render_topnav(show_settings_btn=False, show_back_btn=False, show_chat_btn=True)
 
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
@@ -2221,6 +2291,12 @@ def render_faq():
               <p>Upload a WhatsApp export in Settings,<br>then click Generate Answers.</p>
             </div>
             """, unsafe_allow_html=True)
+
+    # ── Floating Chat Button ──────────────────────────────────────
+    st.markdown("""
+    <a href="?nav=chat" class="chat-fab" title="Open AI Chat">💬</a>
+    <span class="chat-fab-tooltip">AI Chat</span>
+    """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════
