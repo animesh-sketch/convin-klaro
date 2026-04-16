@@ -1708,7 +1708,7 @@ def render_settings():
 
         wa_up = st.file_uploader(
             "wa_upload", accept_multiple_files=True,
-            type=["txt", "zip", "pdf", "docx", "doc", "xlsx", "xls", "csv", "pptx", "ppt", "png", "jpg", "jpeg", "webp", "gif", "mp4", "mp3", "ogg", "opus", "aac", "wav", "json"],
+            type=["txt", "zip", "pdf", "docx", "doc", "xlsx", "xls", "csv", "pptx", "ppt", "png", "jpg", "jpeg", "webp", "gif", "mp4", "mp3", "ogg", "opus", "aac", "wav", "json", "html", "htm"],
             key="wa_uploader", label_visibility="collapsed",
         )
         if wa_up:
