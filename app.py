@@ -1828,14 +1828,115 @@ def render_settings():
 
 
 # ══════════════════════════════════════════════════════════════════
-#  FAQ PAGE
+#  FAQ PAGE  —  3-tab layout
+#  Tab 1: FAQ         — all Q&As (every source)
+#  Tab 2: Q&A         — generic only (docs + web, no WhatsApp)
+#  Tab 3: WhatsApp    — WhatsApp-extracted Q&As only
 # ══════════════════════════════════════════════════════════════════
+
+def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
+    """Reusable search + category expanders for a subset of FAQs."""
+    if not subset:
+        st.markdown("""
+        <div class="no-faq">
+          <div class="no-faq-icon">✦</div>
+          <h3>Nothing here yet</h3>
+          <p>Generate answers first using the button above.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    cats = list(dict.fromkeys(f["category"] for f in subset))
+
+    sc, qc = st.columns([6, 1])
+    with sc:
+        search = st.text_input(
+            "search", placeholder="🔍  Search questions and answers…",
+            label_visibility="collapsed", key=search_key,
+        )
+    with qc:
+        st.markdown(
+            f"<div style='text-align:right;padding-top:8px;"
+            f"font-size:0.78rem;color:#8D90AA'>"
+            f"<b style='color:#A78BFA'>{len(subset)}</b> Q&As</div>",
+            unsafe_allow_html=True,
+        )
+    slc = search.lower().strip() if search else ""
+
+    for cat in cats:
+        cat_faqs = [f for f in subset if f["category"] == cat]
+        if slc:
+            cat_faqs = [
+                f for f in cat_faqs
+                if slc in f["question"].lower() or slc in f["answer"].lower()
+            ]
+        if not cat_faqs:
+            continue
+
+        st.markdown(
+            f'<div class="cat-label">📂 {cat} &nbsp;·&nbsp; {len(cat_faqs)} questions</div>',
+            unsafe_allow_html=True,
+        )
+
+        for idx, faq in enumerate(cat_faqs):
+            q_disp = faq["question"]
+            a_disp = faq["answer"]
+
+            has_wa = "💬 Chatted by" in a_disp or "chatted by" in a_disp.lower()
+            badge_html = (
+                '<span class="faq-wa-badge">💬 WhatsApp source</span>'
+                if has_wa else
+                '<span class="faq-doc-badge">📄 KB source</span>'
+            )
+
+            if slc:
+                def hl(text, term=slc):
+                    return re.sub(
+                        f"({re.escape(term)})",
+                        r'<mark style="background:rgba(124,58,237,0.28);'
+                        r'border-radius:3px;padding:0 3px;color:#EEF0FA">\1</mark>',
+                        text, flags=re.IGNORECASE,
+                    )
+                a_disp = hl(a_disp)
+                q_disp = hl(q_disp)
+
+            a_rendered = re.sub(
+                r"(💬 Chatted by[^\n]+)",
+                r'<div class="wa-cite">🟢 \1</div>',
+                a_disp,
+            )
+
+            with st.expander(f"Q: {faq['question']}", expanded=False):
+                st.markdown(
+                    f"<div class='faq-answer-wrap'>"
+                    f"<div style='margin-bottom:10px'>{badge_html}</div>"
+                    f"<div class='faq-answer-label'>Answer</div>"
+                    f"<div class='faq-answer-body'>{a_rendered}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    "💬 Ask follow-up in chat",
+                    key=f"faq_ask_{tab_key}_{cat}_{idx}",
+                    type="secondary",
+                ):
+                    st.session_state.quick_q = faq["question"]
+                    st.session_state.page    = "chat"
+                    st.rerun()
+
+
 def render_faq():
     render_topnav(show_settings_btn=False, show_back_btn=True)
 
     faqs  = st.session_state.get("kb_faqs", [])
-    cats  = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
     total = total_sources()
+
+    # Partition into generic (docs + web) and WhatsApp
+    wa_faqs      = [f for f in faqs if f["category"].startswith("WhatsApp:")]
+    generic_faqs = [f for f in faqs if not f["category"].startswith("WhatsApp:")]
+
+    all_cats     = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
+    wa_cats      = list(dict.fromkeys(f["category"] for f in wa_faqs))
 
     # ── Hero ──────────────────────────────────────────────────────
     st.markdown(f"""
@@ -1845,41 +1946,13 @@ def render_faq():
         <p>Auto-generated answers from your entire knowledge base — always up to date</p>
       </div>
       <div class="faq-stat-row">
-        <div class="faq-stat-box"><div class="n">{len(faqs)}</div><div class="l">Questions</div></div>
-        <div class="faq-stat-box"><div class="n">{len(cats)}</div><div class="l">Categories</div></div>
+        <div class="faq-stat-box"><div class="n">{len(faqs)}</div><div class="l">All Q&amp;As</div></div>
+        <div class="faq-stat-box"><div class="n">{len(generic_faqs)}</div><div class="l">Generic Q&amp;A</div></div>
+        <div class="faq-stat-box"><div class="n">{len(wa_faqs)}</div><div class="l">WhatsApp Q&amp;A</div></div>
         <div class="faq-stat-box"><div class="n">{total}</div><div class="l">KB Sources</div></div>
       </div>
     </div>
     """, unsafe_allow_html=True)
-
-    # ── WhatsApp chats panel ──────────────────────────────────────
-    wa_chats = st.session_state.get("kb_whatsapp", [])
-    if wa_chats:
-        wa_cards = ""
-        for w in wa_chats:
-            meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
-            if not meta.get("valid"):
-                continue
-            plist   = " · ".join(meta.get("participants", [])[:3])
-            if len(meta.get("participants", [])) > 3:
-                plist += f" +{len(meta['participants'])-3}"
-            wa_cats = [c for c in cats if c.startswith("WhatsApp:")]
-            wa_q_count = len([f for f in faqs if f["category"].startswith("WhatsApp:")])
-            wa_cards += (
-                f'<div class="wa-chat-card">'
-                f'<div class="wa-chat-top"><span class="wa-chat-icon">💬</span>'
-                f'<span class="wa-chat-name">{w["name"]}</span>'
-                f'<span class="wa-chat-badge">{meta.get("total",0):,} msgs</span></div>'
-                f'<div class="wa-chat-meta">👥 {plist} &nbsp;·&nbsp; 📅 {meta.get("date_range","")}</div>'
-                + (f'<div class="wa-chat-qa">✦ {wa_q_count} answers extracted across {len(wa_cats)} categories</div>' if wa_q_count else '')
-                + f'</div>'
-            )
-        if wa_cards:
-            st.markdown(
-                f'<div class="wa-panel"><div class="wa-panel-title">💬 WhatsApp Chats</div>'
-                f'<div class="wa-cards-row">{wa_cards}</div></div>',
-                unsafe_allow_html=True,
-            )
 
     # ── Action bar ────────────────────────────────────────────────
     ab1, ab2, ab3, ab4 = st.columns([3, 2, 2, 2])
@@ -1903,9 +1976,9 @@ def render_faq():
     with ab4:
         if faqs:
             lines = []
-            for cat in cats:
+            for cat in all_cats:
                 lines += [f"\n{'='*50}", f"  {cat.upper()}", f"{'='*50}\n"]
-                for idx, faq in enumerate([f for f in faqs if f["category"]==cat], 1):
+                for idx, faq in enumerate([f for f in faqs if f["category"] == cat], 1):
                     lines += [f"Q{idx}. {faq['question']}", f"A:  {faq['answer']}\n"]
             st.download_button(
                 "⬇️ Export TXT",
@@ -1960,95 +2033,87 @@ def render_faq():
             prog_ph.empty()
             status_ph.error(f"Error: {e}")
 
-    # ── Search ────────────────────────────────────────────────────
-    if faqs:
-        sc, qc = st.columns([6, 1])
-        with sc:
-            search = st.text_input(
-                "search", placeholder="🔍  Search questions and answers…",
-                label_visibility="collapsed", key="faq_search",
-            )
-        with qc:
+    # ── 3-Tab layout ──────────────────────────────────────────────
+    tab_faq, tab_generic, tab_wa = st.tabs([
+        f"📋  FAQ  ({len(faqs)})",
+        f"💡  Q&A  ({len(generic_faqs)})",
+        f"💬  WhatsApp  ({len(wa_faqs)})",
+    ])
+
+    # ── Tab 1: All FAQs ───────────────────────────────────────────
+    with tab_faq:
+        if faqs:
+            _render_faq_list(faqs, "all", "search_all")
+        else:
+            st.markdown("""
+            <div class="no-faq">
+              <div class="no-faq-icon">✦</div>
+              <h3>Answer Studio is empty</h3>
+              <p>Load at least one source in Settings,<br>
+                 then click <b>✨ Generate Answers</b> above.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Tab 2: Generic Q&A (docs + web) ──────────────────────────
+    with tab_generic:
+        if generic_faqs:
             st.markdown(
-                f"<div style='text-align:right;padding-top:8px;"
-                f"font-size:0.78rem;color:#8D90AA'><b style='color:#A78BFA'>{len(faqs)}</b> Q&As</div>",
+                "<div style='font-size:0.78rem;color:#8D90AA;margin-bottom:16px'>"
+                "Answers extracted from <b style='color:#A78BFA'>documents</b> and "
+                "<b style='color:#A78BFA'>web pages</b> in your knowledge base.</div>",
                 unsafe_allow_html=True,
             )
-        slc = search.lower().strip() if search else ""
+            _render_faq_list(generic_faqs, "generic", "search_generic")
+        else:
+            st.markdown("""
+            <div class="no-faq">
+              <div class="no-faq-icon">💡</div>
+              <h3>No generic Q&As yet</h3>
+              <p>Add documents or web links in Settings,<br>then click Generate Answers.</p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        # ── Categories ────────────────────────────────────────────
-        for cat in cats:
-            cat_faqs = [f for f in faqs if f["category"] == cat]
-            if slc:
-                cat_faqs = [
-                    f for f in cat_faqs
-                    if slc in f["question"].lower() or slc in f["answer"].lower()
-                ]
-            if not cat_faqs:
-                continue
+    # ── Tab 3: WhatsApp Q&As ──────────────────────────────────────
+    with tab_wa:
+        wa_chats = st.session_state.get("kb_whatsapp", [])
 
-            st.markdown(
-                f'<div class="cat-label">📂 {cat} &nbsp;·&nbsp; {len(cat_faqs)} questions</div>',
-                unsafe_allow_html=True,
-            )
-
-            for idx, faq in enumerate(cat_faqs):
-                q_disp = faq["question"]
-                a_disp = faq["answer"]
-
-                # Detect source type for badge
-                has_wa  = "💬 Chatted by" in a_disp or "chatted by" in a_disp.lower()
-                badge_html = (
-                    '<span class="faq-wa-badge">💬 WhatsApp source</span>'
-                    if has_wa else
-                    '<span class="faq-doc-badge">📄 KB source</span>'
+        # WA chats info panel
+        if wa_chats:
+            wa_cards = ""
+            for w in wa_chats:
+                meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
+                if not meta.get("valid"):
+                    continue
+                plist = " · ".join(meta.get("participants", [])[:3])
+                if len(meta.get("participants", [])) > 3:
+                    plist += f" +{len(meta['participants'])-3}"
+                wa_cards += (
+                    f'<div class="wa-chat-card">'
+                    f'<div class="wa-chat-top"><span class="wa-chat-icon">💬</span>'
+                    f'<span class="wa-chat-name">{w["name"]}</span>'
+                    f'<span class="wa-chat-badge">{meta.get("total",0):,} msgs</span></div>'
+                    f'<div class="wa-chat-meta">👥 {plist} &nbsp;·&nbsp; 📅 {meta.get("date_range","")}</div>'
+                    + (f'<div class="wa-chat-qa">✦ {len(wa_faqs)} answers across {len(wa_cats)} categories</div>'
+                       if wa_faqs else '')
+                    + '</div>'
+                )
+            if wa_cards:
+                st.markdown(
+                    f'<div class="wa-panel"><div class="wa-panel-title">💬 WhatsApp Chats in Knowledge Base</div>'
+                    f'<div class="wa-cards-row">{wa_cards}</div></div>',
+                    unsafe_allow_html=True,
                 )
 
-                if slc:
-                    def hl(text, term=slc):
-                        return re.sub(
-                            f"({re.escape(term)})",
-                            r'<mark style="background:rgba(124,58,237,0.28);'
-                            r'border-radius:3px;padding:0 3px;color:#EEF0FA">\1</mark>',
-                            text, flags=re.IGNORECASE,
-                        )
-                    a_disp = hl(a_disp)
-                    q_disp = hl(q_disp)
-
-                # Convert WA citation lines to styled blockquote
-                a_rendered = re.sub(
-                    r"(💬 Chatted by[^\n]+)",
-                    r'<div class="wa-cite">🟢 \1</div>',
-                    a_disp,
-                )
-
-                exp_label = f"Q: {faq['question']}"
-                with st.expander(exp_label, expanded=False):
-                    st.markdown(
-                        f"<div class='faq-answer-wrap'>"
-                        f"<div style='margin-bottom:10px'>{badge_html}</div>"
-                        f"<div class='faq-answer-label'>Answer</div>"
-                        f"<div class='faq-answer-body'>{a_rendered}</div>"
-                        f"</div>",
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(
-                        "💬 Ask follow-up in chat",
-                        key=f"faq_ask_{cat}_{idx}",
-                        type="secondary",
-                    ):
-                        st.session_state.quick_q   = faq["question"]
-                        st.session_state.page      = "chat"
-                        st.rerun()
-    else:
-        st.markdown("""
-        <div class="no-faq">
-          <div class="no-faq-icon">✦</div>
-          <h3>Answer Studio is empty</h3>
-          <p>Load at least one source in Settings,<br>
-             then click <b>✨ Generate Answers</b> above.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if wa_faqs:
+            _render_faq_list(wa_faqs, "wa", "search_wa")
+        else:
+            st.markdown("""
+            <div class="no-faq">
+              <div class="no-faq-icon">💬</div>
+              <h3>No WhatsApp Q&As yet</h3>
+              <p>Upload a WhatsApp export in Settings,<br>then click Generate Answers.</p>
+            </div>
+            """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════
