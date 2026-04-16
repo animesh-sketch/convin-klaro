@@ -1015,58 +1015,135 @@ def ask_claude(query: str) -> tuple[str, list[str]]:
 # ══════════════════════════════════════════════════════════════════
 #  FAQ GENERATOR
 # ══════════════════════════════════════════════════════════════════
-def generate_faqs() -> list[dict]:
-    ctx, _ = build_context()
-    if not ctx.strip():
-        return []
-    client = get_client()
-    prompt = (
-        "You are an expert knowledge analyst. Read the ENTIRE knowledge base below — "
-        "documents, web pages, AND WhatsApp conversations.\n\n"
-        "Your job: extract every distinct topic, decision, question, process, feature, "
-        "policy, or issue that users might ask about.\n\n"
-        "CRITICAL for WhatsApp chats:\n"
-        "• Each line is formatted as [Date Time] Sender: Message\n"
-        "• Extract questions asked in the chat, decisions made, issues discussed\n"
-        "• In the ANSWER, always cite: '💬 Chatted by [Sender] at [Time] on [Date]'\n"
-        "• Example: '💬 Chatted by Vaibhav and Bharat at 1 PM on 3rd June 2026'\n\n"
-        "Rules per Q&A:\n"
-        "• Accurate — only facts from the KB\n"
-        "• Answers for WhatsApp-sourced items MUST include the chat citation\n"
-        "• Concise — 2–5 sentences or a short bullet list\n"
-        "• Clear — no jargon, plain English\n"
-        "• Group into logical categories\n"
-        "• Include a 'WhatsApp Conversations' category if WA content exists\n\n"
-        "Return ONLY a raw JSON array (no markdown, no extra text):\n"
-        '[\n  {"category":"Category Name","question":"Question?","answer":"Answer."},\n  ...\n]\n\n'
-        "Generate at LEAST 100 Q&A pairs. Be exhaustive — cover every topic, sub-topic, "
-        "edge case, feature, policy, conversation, decision, and question you find.\n\n"
-        "KNOWLEDGE BASE:\n" + ctx
-    )
+def _faq_call(client, prompt: str) -> list[dict]:
+    """Single Claude call → parsed FAQ list."""
     r = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=16000,
         messages=[{
             "role": "user",
-            "content": [{"type":"text","text":prompt,"cache_control":{"type":"ephemeral"}}],
+            "content": [{"type": "text", "text": prompt,
+                         "cache_control": {"type": "ephemeral"}}],
         }],
         extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
     )
-    raw = re.sub(r"^```[a-z]*\n?","", r.content[0].text.strip())
-    raw = re.sub(r"\n?```$","", raw)
+    raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
+    raw = re.sub(r"\n?```$", "", raw)
     try:
         items = json.loads(raw)
-        return [
-            {
-                "category": str(i.get("category","General")),
-                "question":  str(i.get("question", i.get("q",""))),
-                "answer":    str(i.get("answer",   i.get("a",""))),
-            }
-            for i in items if isinstance(i, dict)
-        ]
     except json.JSONDecodeError:
-        pairs = re.findall(r'"question"\s*:\s*"([^"]+)"[^}]*"answer"\s*:\s*"([^"]+)"', raw)
-        return [{"category":"General","question":q,"answer":a} for q,a in pairs]
+        pairs = re.findall(
+            r'"question"\s*:\s*"([^"]+)"[^}]*"answer"\s*:\s*"([^"]+)"', raw
+        )
+        return [{"category": "General", "question": q, "answer": a} for q, a in pairs]
+    return [
+        {
+            "category": str(i.get("category", "General")),
+            "question": str(i.get("question", i.get("q", ""))),
+            "answer":   str(i.get("answer",   i.get("a", ""))),
+        }
+        for i in items if isinstance(i, dict) and i.get("question")
+    ]
+
+
+def generate_faqs(progress_cb=None) -> list[dict]:
+    """Multi-pass FAQ generation — one full Claude call per source type.
+
+    progress_cb(pct, label) is called after each pass so the UI can update.
+    """
+    client  = get_client()
+    all_faqs: list[dict] = []
+
+    BASE_RULES = (
+        "Rules:\n"
+        "• Only include facts present in the content — never invent.\n"
+        "• Be EXHAUSTIVE: cover every topic, feature, process, policy, edge case, "
+        "decision, question, issue, and fact — no matter how minor.\n"
+        "• Each answer: 2–6 sentences or a short bullet list.\n"
+        "• Group into specific, descriptive categories.\n"
+        "• Return ONLY a raw JSON array (no markdown, no extra text):\n"
+        '[\n  {"category":"Name","question":"Q?","answer":"A."},\n  ...\n]\n'
+    )
+
+    # ── Pass 1: Documents ─────────────────────────────────────────
+    docs = st.session_state.get("kb_documents", [])
+    if docs:
+        ctx = "\n\n".join(
+            f"=== DOCUMENT: {d['name']} ===\n{d['content']}" for d in docs
+        )[:MAX_CTX]
+        prompt = (
+            "You are extracting the maximum possible FAQs from uploaded documents.\n"
+            "Read every sentence. Extract every question a user could ever ask.\n\n"
+            + BASE_RULES +
+            "\nExtract the MAXIMUM number of Q&A pairs possible.\n\n"
+            "DOCUMENTS:\n" + ctx
+        )
+        if progress_cb: progress_cb(0.15, f"📄 Processing {len(docs)} document(s)…")
+        try:
+            all_faqs.extend(_faq_call(client, prompt))
+        except Exception:
+            pass
+
+    # ── Pass 2: Web links + crawled pages ────────────────────────
+    web = st.session_state.get("kb_links", []) + st.session_state.get("kb_crawled", [])
+    if web:
+        ctx = "\n\n".join(
+            f"=== PAGE: {p.get('title', p.get('url',''))} ===\n{p['content']}"
+            for p in web
+        )[:MAX_CTX]
+        prompt = (
+            f"You are extracting the maximum possible FAQs from {len(web)} web page(s).\n"
+            "Read every sentence. Extract every question a user could ever ask.\n\n"
+            + BASE_RULES +
+            "\nExtract the MAXIMUM number of Q&A pairs possible.\n\n"
+            "WEB PAGES:\n" + ctx
+        )
+        if progress_cb: progress_cb(0.45, f"🌐 Processing {len(web)} web page(s)…")
+        try:
+            all_faqs.extend(_faq_call(client, prompt))
+        except Exception:
+            pass
+
+    # ── Pass 3: WhatsApp chats ────────────────────────────────────
+    wa_chats = st.session_state.get("kb_whatsapp", [])
+    if wa_chats:
+        ctx = "\n\n".join(
+            f"=== WHATSAPP CHAT: {w['name']} ===\n{w['content']}" for w in wa_chats
+        )[:MAX_CTX]
+        prompt = (
+            f"You are extracting the maximum possible FAQs from {len(wa_chats)} "
+            "WhatsApp chat export(s).\n\n"
+            "Each message line is formatted as: [DD/MM/YY HH:MM] Sender: Message\n\n"
+            "CRITICAL WhatsApp rules:\n"
+            "• Extract EVERY question asked, decision made, issue raised, "
+            "information shared, or topic discussed.\n"
+            "• Every answer MUST end with the exact citation:\n"
+            "  '💬 Chatted by [Sender Name] at [HH:MM] on [DD/MM/YY]'\n"
+            "• If multiple people were involved, list all: "
+            "'💬 Chatted by Alice and Bob at 2:30 PM on 05/06/26'\n"
+            "• Use 'WhatsApp Conversations' as the category for these.\n\n"
+            + BASE_RULES +
+            "\nExtract the MAXIMUM number of Q&A pairs from the chat.\n\n"
+            "WHATSAPP CHATS:\n" + ctx
+        )
+        if progress_cb: progress_cb(0.70, f"💬 Processing {len(wa_chats)} WhatsApp chat(s)…")
+        try:
+            all_faqs.extend(_faq_call(client, prompt))
+        except Exception:
+            pass
+
+    if progress_cb: progress_cb(0.95, "✨ Deduplicating and finalising…")
+
+    # ── Deduplicate by question (case-insensitive) ────────────────
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for f in all_faqs:
+        key_q = f["question"].lower().strip()
+        if key_q and key_q not in seen:
+            seen.add(key_q)
+            deduped.append(f)
+
+    return deduped
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1569,14 +1646,29 @@ def render_faq():
     if gen_btn:
         prog_ph   = st.empty()
         status_ph = st.empty()
+
+        docs_n  = len(st.session_state.get("kb_documents", []))
+        links_n = len(st.session_state.get("kb_links", [])) + len(st.session_state.get("kb_crawled", []))
+        wa_n    = len(st.session_state.get("kb_whatsapp", []))
+        passes  = sum(1 for x in [docs_n, links_n, wa_n] if x > 0)
+
         status_ph.markdown(
-            "<span style='color:#818cf8;font-size:0.85rem'>"
-            "🤖 Reading your entire knowledge base and generating 100 FAQs — this may take 30–60 seconds…</span>",
+            f"<span style='color:#818cf8;font-size:0.85rem'>"
+            f"🤖 Running {passes} extraction pass(es) across all sources — "
+            f"extracting maximum Q&amp;As…</span>",
             unsafe_allow_html=True,
         )
-        prog_ph.progress(0.25)
+        prog_ph.progress(0.05)
+
+        def _progress(pct, label):
+            prog_ph.progress(pct)
+            status_ph.markdown(
+                f"<span style='color:#818cf8;font-size:0.85rem'>{label}</span>",
+                unsafe_allow_html=True,
+            )
+
         try:
-            new_faqs = generate_faqs()
+            new_faqs = generate_faqs(progress_cb=_progress)
             prog_ph.progress(1.0)
             if new_faqs:
                 st.session_state.kb_faqs = new_faqs
@@ -1584,7 +1676,7 @@ def render_faq():
                 prog_ph.empty()
                 n_cats = len(set(f["category"] for f in new_faqs))
                 status_ph.success(
-                    f"✅ {len(new_faqs)} FAQs generated across {n_cats} categories — saved!"
+                    f"✅ {len(new_faqs)} FAQs extracted across {n_cats} categories — saved!"
                 )
                 st.rerun()
             else:
