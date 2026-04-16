@@ -143,9 +143,9 @@ with open(KB_PATH) as f:
     kb = json.load(f)
 
 # Update kb_whatsapp — replace old entry for this file
-wa_list = [w for w in kb.get("kb_whatsapp", []) if w.get("name") != "Convin_Pilots_Chat.html"]
+wa_list = [w for w in kb.get("kb_whatsapp", []) if w.get("name") != "KB- WA"]
 wa_list.append({
-    "name":     "Convin_Pilots_Chat.html",
+    "name":     "KB- WA",
     "content":  chat_text,
     "added_at": datetime.now().isoformat(),
     "size":     len(chat_text),
