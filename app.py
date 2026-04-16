@@ -2727,8 +2727,48 @@ def render_faq():
                         f'<div class="wa-cards-row">{wa_cards}</div></div>',
                         unsafe_allow_html=True,
                     )
+
             if wa_faqs:
-                _render_faq_list(wa_faqs, "wa", "search_wa")
+                # ── Category dashboard ────────────────────────────────
+                wa_cat_counts = {}
+                for f in wa_faqs:
+                    label = f["category"].replace("WhatsApp: ", "")
+                    wa_cat_counts[label] = wa_cat_counts.get(label, 0) + 1
+
+                CAT_ICONS = {
+                    "Pilot Clients & Metrics": "📊",
+                    "Product Issues & Bugs":   "🐛",
+                    "Setup & Configuration":   "⚙️",
+                    "Onboarding Learnings":    "🚀",
+                    "Client Objections & Responses": "💬",
+                    "Feature Requests":        "✨",
+                    "Bot Performance":         "🤖",
+                    "Sales Process":           "💼",
+                }
+                cat_cards_html = ""
+                for label, count in sorted(wa_cat_counts.items(), key=lambda x: -x[1]):
+                    icon = CAT_ICONS.get(label, "📌")
+                    cat_cards_html += (
+                        f'<div style="background:#1a1d2e;border:1px solid #2d3158;border-radius:10px;'
+                        f'padding:14px 16px;min-width:160px;flex:1">'
+                        f'<div style="font-size:1.4rem">{icon}</div>'
+                        f'<div style="font-size:1.5rem;font-weight:700;color:#A78BFA;margin:4px 0">{count}</div>'
+                        f'<div style="font-size:0.72rem;color:#9CA3AF;line-height:1.3">{label}</div>'
+                        f'</div>'
+                    )
+                st.markdown(
+                    f'<div style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 24px">'
+                    f'{cat_cards_html}</div>',
+                    unsafe_allow_html=True,
+                )
+
+                # ── Per-category expandable Q&A sections ──────────────
+                for label, count in sorted(wa_cat_counts.items(), key=lambda x: -x[1]):
+                    icon = CAT_ICONS.get(label, "📌")
+                    full_cat = "WhatsApp: " + label
+                    bucket = [f for f in wa_faqs if f["category"] == full_cat]
+                    with st.expander(f"{icon} {label}  ·  {count} Q&As", expanded=False):
+                        _render_faq_list(bucket, f"wa_{label[:20]}", f"search_wa_{label[:20]}")
             else:
                 st.markdown("""
                 <div class="no-faq">
