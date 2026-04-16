@@ -400,27 +400,65 @@ hr { border:none; border-top:1px solid rgba(255,255,255,0.07) !important; margin
     box-shadow:0 0 0 1px rgba(151,71,255,0.3) !important;
 }
 
-/* Expander — FAQ cards */
+/* ── Expander — works across Streamlit versions ────────────── */
+
+/* Old class names (Streamlit < 1.30) */
 .streamlit-expanderHeader {
-    background: rgba(151,71,255,0.08) !important;
-    border: 1px solid rgba(151,71,255,0.22) !important;
+    background: #1C0F35 !important;
+    border: 1px solid #6D28D9 !important;
     border-radius: 10px !important;
-    color: #F0F0FA !important;
-    font-size: 0.88rem !important;
+    color: #F5F0FF !important;
+    font-size: 0.9rem !important;
     font-weight: 600 !important;
 }
-.streamlit-expanderHeader:hover {
-    background: rgba(151,71,255,0.14) !important;
-    border-color: rgba(151,71,255,0.4) !important;
-    color: #FFFFFF !important;
-}
-.streamlit-expanderHeader svg { color: #C084FC !important; }
+.streamlit-expanderHeader:hover { background: #241245 !important; color: #FFFFFF !important; }
 .streamlit-expanderContent {
-    border: 1px solid rgba(151,71,255,0.18) !important;
+    background: #120A22 !important;
+    border: 1px solid #6D28D9 !important;
     border-top: none !important;
     border-radius: 0 0 10px 10px !important;
-    background: rgba(20,12,40,0.85) !important;
-    padding: 4px 0 !important;
+}
+
+/* New selectors (Streamlit 1.30+) */
+[data-testid="stExpander"] {
+    border: 1px solid #6D28D9 !important;
+    border-radius: 10px !important;
+    background: #1C0F35 !important;
+    margin-bottom: 8px !important;
+}
+[data-testid="stExpander"] summary {
+    background: #1C0F35 !important;
+    color: #F5F0FF !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    border-radius: 10px !important;
+    padding: 12px 16px !important;
+}
+[data-testid="stExpander"] summary:hover {
+    background: #241245 !important;
+    color: #FFFFFF !important;
+}
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary p {
+    color: #F5F0FF !important;
+    font-weight: 600 !important;
+}
+[data-testid="stExpander"] > div:last-child {
+    background: #120A22 !important;
+    border-top: 1px solid #4C1D95 !important;
+    padding: 0 !important;
+}
+/* All text inside expander content */
+[data-testid="stExpander"] > div:last-child *,
+[data-testid="stExpander"] > div:last-child p,
+[data-testid="stExpander"] > div:last-child span,
+[data-testid="stExpander"] > div:last-child li,
+[data-testid="stExpander"] > div:last-child div {
+    color: #FFFFFF !important;
+}
+[data-testid="stExpander"] > div:last-child strong,
+[data-testid="stExpander"] > div:last-child b {
+    color: #C084FC !important;
 }
 
 /* Progress */
@@ -678,11 +716,13 @@ hr { border:none; border-top:1px solid rgba(255,255,255,0.07) !important; margin
     font-size: 0.65rem; font-weight: 700; color: #C084FC;
     margin-left: 8px;
 }
+.streamlit-expanderContent,
 .streamlit-expanderContent p,
 .streamlit-expanderContent li,
 .streamlit-expanderContent div,
 .streamlit-expanderContent span {
-    color: #EAEAF5 !important;
+    color: #FFFFFF !important;
+    background: #120A22 !important;
 }
 .streamlit-expanderContent strong,
 .streamlit-expanderContent b {
@@ -2066,16 +2106,24 @@ def render_faq():
                 exp_label = f"Q: {faq['question']}"
                 with st.expander(exp_label, expanded=False):
                     st.markdown(
+                        f"<div style='padding:14px 18px 16px;background:#120A22'>"
                         f"<div style='margin-bottom:10px'>{badge_html}</div>"
                         f"<div style='"
-                        f"font-size:0.9rem;"
-                        f"color:#EAEAF5;"
-                        f"line-height:1.8;"
-                        f"padding:10px 16px 12px;"
-                        f"background:rgba(255,255,255,0.04);"
-                        f"border-left:3px solid #9747FF;"
-                        f"border-radius:0 8px 8px 0;"
-                        f"'>{a_rendered}</div>",
+                        f"display:block;"
+                        f"font-size:0.72rem;font-weight:800;letter-spacing:0.1em;"
+                        f"text-transform:uppercase;color:#9747FF;"
+                        f"margin-bottom:8px;"
+                        f"'>Answer</div>"
+                        f"<div style='"
+                        f"font-size:0.93rem;"
+                        f"color:#FFFFFF;"
+                        f"line-height:1.85;"
+                        f"padding:14px 18px 14px 16px;"
+                        f"background:#1E1133;"
+                        f"border-left:4px solid #9747FF;"
+                        f"border-radius:0 10px 10px 0;"
+                        f"'>{a_rendered}</div>"
+                        f"</div>",
                         unsafe_allow_html=True,
                     )
                     if st.button(
