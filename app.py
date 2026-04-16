@@ -689,6 +689,35 @@ hr { border:none; border-top:1px solid rgba(255,255,255,0.07) !important; margin
     color: #C084FC !important;
 }
 
+/* ══ WHATSAPP PANEL IN ANSWER STUDIO ════════════════════ */
+.wa-panel {
+    background: rgba(37,211,102,0.05);
+    border: 1px solid rgba(37,211,102,0.18);
+    border-radius: 14px; padding: 16px 20px; margin-bottom: 18px;
+}
+.wa-panel-title {
+    font-size: 0.78rem; font-weight: 700; color: #34D399;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 12px;
+}
+.wa-cards-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.wa-chat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(37,211,102,0.2);
+    border-radius: 12px; padding: 12px 16px; min-width: 240px; flex: 1;
+}
+.wa-chat-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.wa-chat-icon { font-size: 1rem; }
+.wa-chat-name { font-size: 0.82rem; font-weight: 600; color: #E2E2EC; flex: 1; }
+.wa-chat-badge {
+    font-size: 0.65rem; font-weight: 700; color: #34D399;
+    background: rgba(37,211,102,0.12);
+    border: 1px solid rgba(37,211,102,0.25);
+    border-radius: 10px; padding: 2px 8px;
+}
+.wa-chat-meta { font-size: 0.72rem; color: #6B6B80; margin-bottom: 4px; }
+.wa-chat-qa { font-size: 0.7rem; color: #34D399; font-weight: 600; margin-top: 4px; }
+
 /* ══ TOPNAV NAV BUTTONS ══════════════════════════════════ */
 /* Make the FAQ / Settings nav buttons look like nav pills */
 div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button,
@@ -869,37 +898,72 @@ def fetch_url(url):
     except Exception as e:
         return url, f"[Error: {e}]"
 
-def parse_wa(raw):
-    """Parse WhatsApp export — preserves timestamps & sender names for citation."""
-    # Matches: [DD/MM/YY, HH:MM] - Sender: Message  OR  DD/MM/YY, HH:MM - Sender: Message
-    pat = re.compile(
-        r"^\[?(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}),?\s*"
-        r"(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)\]?\s*[-–]\s*"
-        r"([^:]+):\s*(.*)"
-    )
-    SKIP = {
-        "<Media omitted>", "This message was deleted",
-        "image omitted", "video omitted", "audio omitted",
-        "sticker omitted", "document omitted", "GIF omitted",
-        "Contact card omitted",
-    }
-    lines = []
+_WA_SKIP = {
+    "<Media omitted>", "This message was deleted", "image omitted",
+    "video omitted", "audio omitted", "sticker omitted", "document omitted",
+    "GIF omitted", "Contact card omitted", "Missed voice call",
+    "Missed video call", "null", "",
+}
+
+# WhatsApp message patterns — iOS and Android, 12h and 24h
+_WA_PATTERNS = [
+    # iOS:     [DD/MM/YYYY, HH:MM:SS] Sender: Msg
+    re.compile(r"^\[(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)\]\s+([^:]+):\s*(.*)"),
+    # Android: DD/MM/YYYY, HH:MM - Sender: Msg
+    re.compile(r"^(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)\s*[-–]\s*([^:]+):\s*(.*)"),
+]
+
+def _wa_match(line: str):
+    """Try all WA patterns; return (date, time, sender, msg) or None."""
+    for pat in _WA_PATTERNS:
+        m = pat.match(line.strip())
+        if m:
+            return m.group(1), m.group(2).strip(), m.group(3).strip(), m.group(4).strip()
+    return None
+
+def parse_wa(raw: str) -> str:
+    """Parse a WhatsApp export preserving full [date time] Sender: message format."""
+    lines_out = []
     for ln in raw.split("\n"):
         s = ln.strip()
         if not s:
             continue
-        m = pat.match(s)
-        if m:
-            date, time_, sender, msg = (
-                m.group(1), m.group(2), m.group(3).strip(), m.group(4).strip()
-            )
-            if not msg or msg in SKIP or any(sk in msg for sk in SKIP):
+        hit = _wa_match(s)
+        if hit:
+            date, time_, sender, msg = hit
+            if not msg or msg in _WA_SKIP or any(sk.lower() in msg.lower() for sk in _WA_SKIP):
                 continue
-            lines.append(f"[{date} {time_}] {sender}: {msg}")
-        elif lines:
-            # continuation line — append to last message
-            lines[-1] = lines[-1] + " " + s
-    return "\n".join(lines)
+            lines_out.append(f"[{date} {time_}] {sender}: {msg}")
+        elif lines_out:
+            lines_out[-1] = lines_out[-1] + " " + s  # continuation
+    return "\n".join(lines_out)
+
+def parse_wa_meta(content: str) -> dict:
+    """Extract chat metadata for the Answer Studio pre-analysis header."""
+    messages = []
+    for ln in content.split("\n"):
+        hit = _wa_match(ln)
+        if hit:
+            date, time_, sender, msg = hit
+            messages.append({"date": date, "time": time_, "sender": sender, "text": msg})
+
+    if not messages:
+        return {"valid": False, "total": 0, "participants": [], "date_range": ""}
+
+    participants = list(dict.fromkeys(m["sender"] for m in messages))
+    counts = {}
+    for m in messages:
+        counts[m["sender"]] = counts.get(m["sender"], 0) + 1
+
+    return {
+        "valid": True,
+        "total": len(messages),
+        "participants": participants,
+        "msg_counts": counts,
+        "first_date": messages[0]["date"],
+        "last_date": messages[-1]["date"],
+        "date_range": f"{messages[0]['date']} → {messages[-1]['date']}",
+    }
 
 def crawl_site(root, max_p, status_ph, prog_ph):
     try:
@@ -1119,33 +1183,100 @@ def generate_faqs(progress_cb=None) -> list[dict]:
         except Exception:
             pass
 
-    # ── Pass 3: WhatsApp chats ────────────────────────────────────
+    # ── Pass 3 & 4: WhatsApp — two deep-extraction passes per chat ──
     wa_chats = st.session_state.get("kb_whatsapp", [])
     if wa_chats:
-        ctx = "\n\n".join(
-            f"=== WHATSAPP CHAT: {w['name']} ===\n{w['content']}" for w in wa_chats
-        )[:MAX_CTX]
-        prompt = (
-            f"You are extracting the maximum possible FAQs from {len(wa_chats)} "
-            "WhatsApp chat export(s).\n\n"
-            "Each message line is formatted as: [DD/MM/YY HH:MM] Sender: Message\n\n"
-            "CRITICAL WhatsApp rules:\n"
-            "• Extract EVERY question asked, decision made, issue raised, "
-            "information shared, or topic discussed.\n"
-            "• Every answer MUST end with the exact citation:\n"
-            "  '💬 Chatted by [Sender Name] at [HH:MM] on [DD/MM/YY]'\n"
-            "• If multiple people were involved, list all: "
-            "'💬 Chatted by Alice and Bob at 2:30 PM on 05/06/26'\n"
-            "• Use 'WhatsApp Conversations' as the category for these.\n\n"
-            + BASE_RULES +
-            "\nExtract the MAXIMUM number of Q&A pairs from the chat.\n\n"
-            "WHATSAPP CHATS:\n" + ctx
-        )
-        if progress_cb: progress_cb(0.70, f"💬 Processing {len(wa_chats)} WhatsApp chat(s)…")
-        try:
-            all_faqs.extend(_faq_call(client, prompt))
-        except Exception:
-            pass
+        total_wa = len(wa_chats)
+        for wi, chat in enumerate(wa_chats):
+            content = chat.get("content", "").strip()
+            if not content:
+                continue
+
+            meta = parse_wa_meta(content)
+            plist = ", ".join(meta["participants"]) if meta["valid"] else "unknown"
+            drange = meta.get("date_range", "")
+            total_msg = meta.get("total", "?")
+
+            pct_a = 0.60 + (wi / total_wa) * 0.15
+            pct_b = pct_a + 0.07
+
+            CITE_RULE = (
+                "CITATION RULE — every answer MUST end with one of:\n"
+                "  • Single person: '💬 [Name] on [Date] at [Time]'\n"
+                "  • Exchange: '💬 [Name1] asked, [Name2] replied on [Date]'\n"
+                "  • Group: '💬 Discussed by [Name1], [Name2] on [Date]'\n"
+                "Use the actual names, dates, and times from the messages.\n\n"
+            )
+
+            HEADER = (
+                f"WhatsApp chat: {chat['name']}\n"
+                f"Participants: {plist}\n"
+                f"Date range: {drange}  |  Messages: {total_msg}\n\n"
+                "Each line format: [DD/MM/YY HH:MM] Sender: Message\n\n"
+            )
+
+            # ── Sub-pass A: Direct Q&As + Decisions + Action items ──
+            if progress_cb:
+                progress_cb(pct_a, f"💬 Chat {wi+1}/{total_wa} — extracting Q&As, decisions, actions…")
+            prompt_a = (
+                "You are a knowledge analyst. Deeply read this WhatsApp conversation.\n\n"
+                + HEADER
+                + CITE_RULE
+                + "EXTRACT THESE THREE TYPES (be exhaustive):\n\n"
+                "TYPE 1 — QUESTIONS & ANSWERS\n"
+                "Find every explicit question (ends with ?, starts with how/what/when/why/who/where/can/should/is/are/do/does/will/would) "
+                "AND every implied question (topic raised that others responded to). "
+                "Pair each with its answer from the conversation.\n"
+                "→ Category: 'WhatsApp: Questions & Answers'\n\n"
+                "TYPE 2 — DECISIONS & AGREEMENTS\n"
+                "Find everything agreed upon, confirmed, resolved, or decided. "
+                "Look for: 'agreed', 'decided', 'confirmed', 'let's go with', 'we'll', 'done', 'sorted', 'ok let's'.\n"
+                "→ Category: 'WhatsApp: Decisions & Agreements'\n\n"
+                "TYPE 3 — ACTION ITEMS & TASKS\n"
+                "Find every task assigned, promise made, or next step defined. "
+                "Look for: 'will do', 'I'll', 'you need to', 'please', 'can you', 'by [date]', 'follow up'.\n"
+                "→ Category: 'WhatsApp: Action Items & Tasks'\n\n"
+                "Return ONLY raw JSON array:\n"
+                '[\n  {"category":"WhatsApp: Questions & Answers","question":"Q?","answer":"A. 💬 ..."},\n  ...\n]\n\n'
+                "Be exhaustive — extract every single instance.\n\n"
+                "CHAT:\n" + content[:MAX_CTX]
+            )
+            try:
+                all_faqs.extend(_faq_call(client, prompt_a))
+            except Exception:
+                pass
+
+            # ── Sub-pass B: Information + Problems + Context + Insights ──
+            if progress_cb:
+                progress_cb(pct_b, f"💬 Chat {wi+1}/{total_wa} — extracting knowledge, issues, insights…")
+            prompt_b = (
+                "You are a knowledge analyst. Deeply read this WhatsApp conversation.\n\n"
+                + HEADER
+                + CITE_RULE
+                + "EXTRACT THESE FOUR TYPES (be exhaustive):\n\n"
+                "TYPE 4 — INFORMATION & KNOWLEDGE SHARED\n"
+                "Find every fact, figure, process, instruction, contact, link, or data point shared. "
+                "Turn each into 'What is/How does/What was...?' format.\n"
+                "→ Category: 'WhatsApp: Information & Knowledge'\n\n"
+                "TYPE 5 — PROBLEMS & RESOLUTIONS\n"
+                "Find every issue, complaint, bug, confusion, or blocker raised — and how it was resolved. "
+                "If unresolved, note that.\n"
+                "→ Category: 'WhatsApp: Issues & Resolutions'\n\n"
+                "TYPE 6 — BUSINESS & PRODUCT INSIGHTS\n"
+                "Find anything about clients, products, features, pricing, timelines, deals, or strategy.\n"
+                "→ Category: 'WhatsApp: Business & Product Insights'\n\n"
+                "TYPE 7 — CONTEXT & BACKGROUND\n"
+                "Find any background context, history, or explanations given about the situation or topic.\n"
+                "→ Category: 'WhatsApp: Context & Background'\n\n"
+                "Return ONLY raw JSON array:\n"
+                '[\n  {"category":"WhatsApp: Information & Knowledge","question":"Q?","answer":"A. 💬 ..."},\n  ...\n]\n\n'
+                "Be exhaustive — extract every single piece of knowledge.\n\n"
+                "CHAT:\n" + content[:MAX_CTX]
+            )
+            try:
+                all_faqs.extend(_faq_call(client, prompt_b))
+            except Exception:
+                pass
 
     if progress_cb: progress_cb(0.95, "✨ Deduplicating and finalising…")
 
@@ -1492,37 +1623,70 @@ def render_settings():
 
     # ── WhatsApp ───────────────────────────────────────────────────
     with t3:
-        st.caption("Export a WhatsApp chat: Chat → More → Export Chat → Without Media → upload the .txt file.")
+        st.markdown("""
+        <div style='background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);
+        border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:0.82rem;color:#86EFAC'>
+        📱 <b>How to export:</b> Open WhatsApp → Chat → ⋮ / ⋯ → More → Export Chat → Without Media → share the <code>.txt</code> file here.
+        </div>
+        """, unsafe_allow_html=True)
+
         wa_up = st.file_uploader(
             "wa_upload", accept_multiple_files=True,
-            key="wa_uploader", label_visibility="collapsed",
+            type=["txt"], key="wa_uploader", label_visibility="collapsed",
         )
         if wa_up:
             ex = {w["name"] for w in st.session_state.kb_whatsapp}
-            added = 0
+            added, skipped = 0, []
             for f in wa_up:
-                if f.name not in ex:
-                    raw = f.read().decode("utf-8","ignore")
-                    parsed = parse_wa(raw)
-                    st.session_state.kb_whatsapp.append({
-                        "name": f.name, "content": parsed,
-                        "added_at": datetime.now().isoformat(), "size": len(parsed),
-                    })
-                    added += 1
+                if f.name in ex:
+                    continue
+                raw = f.read().decode("utf-8", "ignore")
+                parsed = parse_wa(raw)
+                meta   = parse_wa_meta(parsed)
+
+                # Validate it's a real WhatsApp export
+                if not meta["valid"] or meta["total"] < 3:
+                    skipped.append(f.name)
+                    continue
+
+                st.session_state.kb_whatsapp.append({
+                    "name": f.name, "content": parsed,
+                    "added_at": datetime.now().isoformat(),
+                    "size": len(parsed),
+                    "meta": meta,
+                })
+                added += 1
+
             if added:
                 save_kb()
-                st.success(f"✅ {added} chat(s) added.")
+                st.success(f"✅ {added} chat(s) added and parsed.")
+            if skipped:
+                st.warning(f"⚠️ {', '.join(skipped)} — doesn't look like a WhatsApp export (no messages found).")
 
         if st.session_state.kb_whatsapp:
             st.markdown("**Loaded chats**")
             for i, w in enumerate(st.session_state.kb_whatsapp):
+                meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
+                plist = ", ".join(meta.get("participants", [])[:4]) if meta.get("valid") else "—"
+                if len(meta.get("participants", [])) > 4:
+                    plist += f" +{len(meta['participants'])-4} more"
+                drange = meta.get("date_range", "")
+                total_m = meta.get("total", 0)
+
                 ca, cb = st.columns([6, 1])
                 with ca:
                     st.markdown(
-                        f'<div class="file-row">'
+                        f'<div class="file-row" style="flex-direction:column;align-items:flex-start;gap:6px;padding:12px 16px">'
+                        f'<div style="display:flex;align-items:center;gap:8px;width:100%">'
                         f'<span class="file-row-icon">💬</span>'
                         f'<span class="file-row-name">{w["name"]}</span>'
                         f'<span class="file-row-meta">{w["size"]:,} chars · {ts_label(w["added_at"])}</span>'
+                        f'</div>'
+                        f'<div style="display:flex;gap:10px;flex-wrap:wrap;padding-left:24px">'
+                        f'<span style="font-size:0.7rem;color:#34D399">👥 {plist}</span>'
+                        f'<span style="font-size:0.7rem;color:#9898A8">📅 {drange}</span>'
+                        f'<span style="font-size:0.7rem;color:#9898A8">💬 {total_m:,} messages</span>'
+                        f'</div>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
@@ -1621,6 +1785,35 @@ def render_faq():
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # ── WhatsApp chats panel ──────────────────────────────────────
+    wa_chats = st.session_state.get("kb_whatsapp", [])
+    if wa_chats:
+        wa_cards = ""
+        for w in wa_chats:
+            meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
+            if not meta.get("valid"):
+                continue
+            plist   = " · ".join(meta.get("participants", [])[:3])
+            if len(meta.get("participants", [])) > 3:
+                plist += f" +{len(meta['participants'])-3}"
+            wa_cats = [c for c in cats if c.startswith("WhatsApp:")]
+            wa_q_count = len([f for f in faqs if f["category"].startswith("WhatsApp:")])
+            wa_cards += (
+                f'<div class="wa-chat-card">'
+                f'<div class="wa-chat-top"><span class="wa-chat-icon">💬</span>'
+                f'<span class="wa-chat-name">{w["name"]}</span>'
+                f'<span class="wa-chat-badge">{meta.get("total",0):,} msgs</span></div>'
+                f'<div class="wa-chat-meta">👥 {plist} &nbsp;·&nbsp; 📅 {meta.get("date_range","")}</div>'
+                + (f'<div class="wa-chat-qa">✦ {wa_q_count} answers extracted across {len(wa_cats)} categories</div>' if wa_q_count else '')
+                + f'</div>'
+            )
+        if wa_cards:
+            st.markdown(
+                f'<div class="wa-panel"><div class="wa-panel-title">💬 WhatsApp Chats</div>'
+                f'<div class="wa-cards-row">{wa_cards}</div></div>',
+                unsafe_allow_html=True,
+            )
 
     # ── Action bar ────────────────────────────────────────────────
     ab1, ab2, ab3, ab4 = st.columns([3, 2, 2, 2])
