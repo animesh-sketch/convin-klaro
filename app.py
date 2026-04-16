@@ -2469,55 +2469,27 @@ def render_faq():
 
     # ── Hero ──────────────────────────────────────────────────────
         # ── Landing Hero ──────────────────────────────────────────────
-        st.markdown(f"""
-        <div class="lp-hero">
-          <div class="lp-hero-inner">
-
-            <div class="lp-eyebrow">
-              <span class="dot"></span>
-              Convin Sense &nbsp;·&nbsp; AI Knowledge Platform
-            </div>
-
-            <h1 class="lp-title">
-              Your Intelligent<br>
-              <span class="grad">Answer Studio</span>
-            </h1>
-
-            <p class="lp-sub">
-              Auto-generated answers from your entire knowledge base —
-              docs, web pages, and conversations — always up to date.
-            </p>
-
-            <div class="lp-pills">
-              <span class="lp-pill lp-pill-violet">✦ {len(faqs):,} Q&amp;As</span>
-              <span class="lp-pill lp-pill-pink">🤖 AI-Powered Extraction</span>
-              <span class="lp-pill lp-pill-cyan">⚡ Instant Search</span>
-              <span class="lp-pill lp-pill-green">✓ {total} KB Sources</span>
-              <span class="lp-pill lp-pill-amber">💬 Chat Ready</span>
-            </div>
-
-            <div class="lp-stats">
-              <div class="lp-stat lp-stat-v">
-                <span class="n">{len(faq_curated)}</span>
-                <div class="l">Curated FAQ</div>
-              </div>
-              <div class="lp-stat lp-stat-p">
-                <span class="n">{len(generic_faqs)}</span>
-                <div class="l">Q&amp;A Pairs</div>
-              </div>
-              <div class="lp-stat lp-stat-c">
-                <span class="n">{len(wa_faqs)}</span>
-                <div class="l">WhatsApp Q&amp;A</div>
-              </div>
-              <div class="lp-stat lp-stat-g">
-                <span class="n">{total}</span>
-                <div class="l">KB Sources</div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="lp-hero"><div class="lp-hero-inner">'
+            f'<div class="lp-eyebrow"><span class="dot"></span>Convin Sense &nbsp;&middot;&nbsp; AI Knowledge Platform</div>'
+            f'<div class="lp-title">Your Intelligent <span class="grad">Answer Studio</span></div>'
+            f'<div class="lp-sub">Auto-generated answers from your entire knowledge base — docs, web pages, and conversations — always up to date.</div>'
+            f'<div class="lp-pills">'
+            f'<span class="lp-pill lp-pill-violet">&#10022; {len(faqs):,} Q&amp;As</span>'
+            f'<span class="lp-pill lp-pill-pink">&#129302; AI-Powered</span>'
+            f'<span class="lp-pill lp-pill-cyan">&#9889; Instant Search</span>'
+            f'<span class="lp-pill lp-pill-green">&#10003; {total} KB Sources</span>'
+            f'<span class="lp-pill lp-pill-amber">&#128172; Chat Ready</span>'
+            f'</div>'
+            f'<div class="lp-stats">'
+            f'<div class="lp-stat lp-stat-v"><span class="n">{len(faq_curated)}</span><div class="l">Curated FAQ</div></div>'
+            f'<div class="lp-stat lp-stat-p"><span class="n">{len(generic_faqs)}</span><div class="l">Q&amp;A Pairs</div></div>'
+            f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_faqs)}</span><div class="l">WhatsApp Q&amp;A</div></div>'
+            f'<div class="lp-stat lp-stat-g"><span class="n">{total}</span><div class="l">KB Sources</div></div>'
+            f'</div>'
+            f'</div></div>',
+            unsafe_allow_html=True,
+        )
 
         # ── Action bar ────────────────────────────────────────────────
         ab1, ab2, ab3, ab4 = st.columns([3, 2, 2, 2])
