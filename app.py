@@ -2199,6 +2199,23 @@ def render_settings():
                         st.session_state.kb_whatsapp.pop(i)
                         save_kb(); st.rerun()
 
+                content = w.get("content", "")
+                if content and not w.get("meta", {}).get("is_attachment"):
+                    with st.expander(f"📖 View messages — {w['name']}", expanded=False):
+                        msg_lines = [ln for ln in content.split("\n") if ln.strip()]
+                        show_last = 300
+                        if len(msg_lines) > show_last:
+                            st.caption(f"Showing last {show_last} of {len(msg_lines):,} messages")
+                            msg_lines = msg_lines[-show_last:]
+                        st.markdown(
+                            '<div style="height:420px;overflow-y:auto;font-family:monospace;'
+                            'font-size:0.73rem;line-height:1.6;background:#0d1117;color:#c9d1d9;'
+                            'padding:12px 16px;border-radius:8px;white-space:pre-wrap;">'
+                            + "\n".join(msg_lines).replace("<", "&lt;").replace(">", "&gt;")
+                            + "</div>",
+                            unsafe_allow_html=True,
+                        )
+
     # ── Crawl Site ─────────────────────────────────────────────────
     with t4:
         st.caption("Automatically crawl all pages on a website and add them to the knowledge base.")
