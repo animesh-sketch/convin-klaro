@@ -1,0 +1,36 @@
+# Streamlit secrets — never commit API keys
+.streamlit/secrets.toml
+
+# Local KB cache (data lives in Supabase now)
+kb_store.json
+
+# Logo / binary assets
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Env
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
