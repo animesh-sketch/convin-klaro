@@ -988,13 +988,28 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 .cf-sub   { font-size:0.68rem; color:#6B7280; margin-top:1px; }
 @keyframes cf-msg-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 .cf-msgs {
-    flex:1; min-height:0; padding:16px 14px 10px;
+    height:calc(100dvh - 255px); min-height:120px;
+    padding:16px 14px 10px;
     overflow-y:auto; display:flex; flex-direction:column; gap:10px;
     scroll-behavior:smooth;
 }
-.cf-msgs::-webkit-scrollbar { width:3px; }
-.cf-msgs::-webkit-scrollbar-track { background:transparent; }
-.cf-msgs::-webkit-scrollbar-thumb { background:rgba(99,102,241,.22); border-radius:2px; }
+.cf-msgs::-webkit-scrollbar { width:4px; }
+.cf-msgs::-webkit-scrollbar-track { background:rgba(255,255,255,.03); border-radius:2px; }
+.cf-msgs::-webkit-scrollbar-thumb { background:rgba(99,102,241,.35); border-radius:2px; }
+.cf-msgs::-webkit-scrollbar-thumb:hover { background:rgba(99,102,241,.6); }
+/* scroll-to-bottom button */
+.cf-scroll-btn .stButton>button{
+    height:28px!important;font-size:.72rem!important;font-weight:500!important;
+    background:rgba(99,102,241,.12)!important;
+    border:1px solid rgba(99,102,241,.22)!important;
+    color:#A78BFA!important;border-radius:20px!important;
+    padding:0 12px!important;
+    transition:all .15s!important;
+}
+.cf-scroll-btn .stButton>button:hover{
+    background:rgba(99,102,241,.25)!important;color:#C4B5FD!important;
+    border-color:rgba(99,102,241,.4)!important;
+}
 .cf-user-bubble {
     align-self:flex-end;
     background:linear-gradient(135deg,#7C3AED,#5B21B6);
@@ -4820,6 +4835,15 @@ border-bottom:1px solid rgba(99,102,241,.11)">
 </div>""", unsafe_allow_html=True)
 
         stream_ph = st.empty()
+
+        # ── Scroll-to-bottom button ───────────────────────────────
+        if history:
+            _sb_l, _sb_m, _sb_r = st.columns([2, 2, 2])
+            with _sb_m:
+                st.markdown('<div class="cf-scroll-btn">', unsafe_allow_html=True)
+                if st.button("↓ Latest", key="cf_scroll_bottom", use_container_width=True):
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
         # Pre-fill from quick_q
         if st.session_state.get("quick_q"):
