@@ -1159,8 +1159,6 @@ def total_sources():
 # ══════════════════════════════════════════════════════════════════
 _DEFAULTS = {
     "page":               "faq",
-    "logged_in":          False,
-    "login_user":         "",
     "chat_open":          False,
     "chat_minimized":     False,
     "chat_history":       [],
@@ -1928,67 +1926,6 @@ def generate_faqs(progress_cb=None) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════
 #  SHARED TOP NAV
 # ══════════════════════════════════════════════════════════════════
-#  LOGIN
-# ══════════════════════════════════════════════════════════════════
-
-def render_login():
-    """Username + password login page."""
-    st.markdown("""
-<style>
-body,.stApp{background:#080B18!important;}
-.login-wrap{
-    min-height:100vh;display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(ellipse 90% 60% at 50% 0%,rgba(99,102,241,.18) 0%,transparent 65%);
-}
-.login-card{
-    background:rgba(13,16,30,.96);border:1px solid rgba(99,102,241,.18);
-    border-radius:20px;padding:40px 36px 36px;width:100%;max-width:420px;
-    box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(99,102,241,.06) inset;
-}
-.login-logo{
-    width:48px;height:48px;border-radius:14px;
-    background:linear-gradient(135deg,#7C3AED,#6366F1);
-    display:flex;align-items:center;justify-content:center;
-    font-size:1.5rem;margin:0 auto 18px;
-    box-shadow:0 4px 20px rgba(99,102,241,.45);
-}
-.login-title{font-size:1.35rem;font-weight:800;color:#F3F4F6;text-align:center;
-    letter-spacing:-.02em;margin-bottom:4px;}
-.login-sub{font-size:.8rem;color:#6B7280;text-align:center;margin-bottom:28px;}
-.login-label{font-size:.75rem;color:#9CA3AF;font-weight:500;margin-bottom:6px;
-    letter-spacing:.3px;text-transform:uppercase;}
-</style>
-<div class="login-wrap">
-  <div class="login-card">
-    <div class="login-logo">🔐</div>
-    <div class="login-title">Convin Klaro</div>
-    <div class="login-sub">AI Support Intelligence · Sign in to continue</div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
-    _, col, _ = st.columns([1, 2, 1])
-    with col:
-        st.markdown('<div class="login-label">Username</div>', unsafe_allow_html=True)
-        username = st.text_input("username", placeholder="Enter username",
-                                 label_visibility="collapsed", key="login_username")
-        st.markdown('<div class="login-label" style="margin-top:12px">Password</div>',
-                    unsafe_allow_html=True)
-        password = st.text_input("password", placeholder="Enter password", type="password",
-                                 label_visibility="collapsed", key="login_password")
-        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-        if st.button("Sign In →", type="primary", use_container_width=True, key="login_submit"):
-            users = dict(st.secrets.get("users", {}))
-            uname = (username or "").strip()
-            if uname in users and users[uname] == password:
-                st.session_state.logged_in  = True
-                st.session_state.login_user = uname
-                st.rerun()
-            else:
-                st.error("Incorrect username or password.")
-
-
-# ══════════════════════════════════════════════════════════════════
 def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False, show_client_btn=False):  # noqa: ARG001 show_client_btn kept for compat
     docs, links, wa, pages = kb_stats()
     total = docs + links + wa + pages
@@ -2000,11 +1937,6 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
         if _LOGO_URI else
         '<div class="dot">K</div>'
     )
-    login_user = st.session_state.get("login_user", "")
-    user_badge = (f'<span style="font-size:.72rem;color:#A78BFA;background:rgba(99,102,241,.12);'
-                  f'border:1px solid rgba(99,102,241,.2);border-radius:20px;padding:3px 10px;'
-                  f'margin-right:8px">👤 {login_user}</span>'
-                  if login_user else "")
     st.markdown(f"""
     <div class="topnav">
       <div class="topnav-brand">
@@ -2013,7 +1945,6 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
         <span class="badge">AI Support Intelligence</span>
       </div>
       <div class="topnav-right">
-        {user_badge}
         <span class="topnav-status">
           <span class="live-dot"></span>
           {status_label}
@@ -2025,7 +1956,7 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
     # Streamlit buttons — functional nav row
     nav_spacer = st.container()
     with nav_spacer:
-        c_l, c_faq, c_set, c_out = st.columns([4.5, 1.3, 1.3, 1.1])
+        c_l, c_faq, c_set = st.columns([5.5, 1.3, 1.3])
         if show_back_btn:
             with c_l:
                 if st.button("← Back to Answer Studio", key="back_btn", type="secondary"):
@@ -2053,11 +1984,6 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
                              use_container_width=True):
                     st.session_state.page = "settings"
                     st.rerun()
-        with c_out:
-            if st.button("⏻ Logout", key="logout_btn", use_container_width=True):
-                st.session_state.logged_in  = False
-                st.session_state.login_user = ""
-                st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -5136,9 +5062,7 @@ def render_faq():
 # ══════════════════════════════════════════════════════════════════
 #  ROUTER
 # ══════════════════════════════════════════════════════════════════
-if not st.session_state.get("logged_in"):
-    render_login()
-elif st.session_state.page == "chat":
+if st.session_state.page == "chat":
     render_chat()
 elif st.session_state.page == "settings":
     render_settings()
