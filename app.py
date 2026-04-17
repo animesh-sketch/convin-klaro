@@ -1632,7 +1632,7 @@ def ask_claude(query: str) -> tuple[str, list[str]]:
     history.append({"role": "user", "content": query})
 
     r = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-haiku-4-5-20251001",
         max_tokens=900,
         system=system,
         messages=history,
@@ -1699,7 +1699,7 @@ def ask_claude_stream(query: str, placeholder) -> tuple[str, list[str]]:
 def _faq_call(client, prompt: str) -> list[dict]:
     """Single Claude call → parsed FAQ list."""
     r = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-haiku-4-5-20251001",
         max_tokens=16000,
         messages=[{
             "role": "user",
@@ -2136,7 +2136,7 @@ def _merge_similar_categories(faqs: list[dict], min_count: int = 5) -> list[dict
     mapping: dict[str, str] = {}
     try:
         r = get_client().messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             max_tokens=2000,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -3383,7 +3383,7 @@ def _generate_wa_generic_qas(progress_cb=None) -> list[dict]:
 
             try:
                 r = ai_client.messages.create(
-                    model="claude-sonnet-4-6",
+                    model="claude-haiku-4-5-20251001",
                     max_tokens=14000,
                     messages=[{
                         "role": "user",
@@ -3488,7 +3488,7 @@ def _generate_rlqa(progress_cb=None) -> list[dict]:
 
         try:
             r = ai_client.messages.create(
-                model="claude-sonnet-4-6",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=14000,
                 messages=[{
                     "role": "user",
@@ -4017,7 +4017,7 @@ def _generate_client_qas(client_name: str, chats: list[dict], progress_cb=None) 
 
         try:
             r = ai_client.messages.create(
-                model="claude-sonnet-4-6",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=12000,
                 messages=[{
                     "role": "user",
