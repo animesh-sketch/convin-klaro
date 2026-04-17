@@ -2453,13 +2453,12 @@ def _render_category_dashboard(subset: list[dict], tab_key: str, no_content_msg:
     )
 
     # ── Per-category expanders ────────────────────────────────────
-    for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
+    for ci, (cat, count) in enumerate(sorted(cat_counts.items(), key=lambda x: -x[1])):
         icon = _CAT_ICONS.get(cat, "📌")
         label = cat.replace("WhatsApp: ", "")
         bucket = [f for f in subset if f["category"] == cat]
-        safe_key = cat.replace(" ", "_").replace(":", "")[:25]
         with st.expander(f"{icon}  {label}  ·  {count} Q&As", expanded=False):
-            _render_faq_list(bucket, f"{tab_key}_{safe_key}", f"search_{tab_key}_{safe_key}")
+            _render_faq_list(bucket, f"{tab_key}_{ci}", f"search_{tab_key}_{ci}")
 
 def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
     """Reusable search + category expanders for a subset of FAQs."""
