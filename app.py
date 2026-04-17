@@ -2371,6 +2371,96 @@ _CONVIN_FAQ_CATS = {
 # Max Q&As shown per category in the FAQ tab to keep it concise
 _FAQ_CAP_PER_CAT = 5
 
+_CAT_ICONS = {
+    # WhatsApp pilot categories
+    "WhatsApp: Pilot Clients & Metrics":        "📊",
+    "WhatsApp: Product Issues & Bugs":          "🐛",
+    "WhatsApp: Setup & Configuration":          "⚙️",
+    "WhatsApp: Onboarding Learnings":           "🚀",
+    "WhatsApp: Client Objections & Responses":  "💬",
+    "WhatsApp: Feature Requests":               "✨",
+    "WhatsApp: Bot Performance":                "🤖",
+    "WhatsApp: Sales Process":                  "💼",
+    # Product / FAQ categories
+    "AI Phone Call Platform":           "📞",
+    "Conversation Intelligence":        "🧠",
+    "Real-Time Assist":                 "⚡",
+    "Auto QA":                          "✅",
+    "Convin Insights":                  "📈",
+    "Pricing & Plans":                  "💰",
+    "Integrations":                     "🔗",
+    "Company & Background":             "🏢",
+    "Sales Use Case":                   "💼",
+    "Coaching":                         "🎯",
+    "LMS":                              "📚",
+    "Healthcare":                       "🏥",
+    "Banking & Finance":                "🏦",
+    "Compliance":                       "🛡️",
+    "Customer Retention":               "🤝",
+    "Lead Qualification":               "🎯",
+    "Collections":                      "💳",
+    "BPO":                              "🏭",
+    "Insurance":                        "📋",
+    "Home Services":                    "🏠",
+    # Generic
+    "Business Outcomes & ROI":          "📊",
+    "Core Capabilities":                "⚙️",
+    "How It Works":                     "🔍",
+    "After Hours Answering Service":    "🌙",
+    "Answering Service Pricing Models": "💰",
+    "AI Call Answering Service":        "🤖",
+    "Customer Satisfaction Score":      "⭐",
+    "Call Queue Management":            "📋",
+    "Bot Performance":                  "🤖",
+    "Feature Requests":                 "✨",
+    "Setup & Configuration":            "⚙️",
+    "Onboarding Learnings":             "🚀",
+    "Sales Process":                    "💼",
+}
+
+def _render_category_dashboard(subset: list[dict], tab_key: str, no_content_msg: str = "No Q&As yet."):
+    """Category cards + per-category expandable Q&A list."""
+    if not subset:
+        st.markdown(f"""
+        <div class="no-faq">
+          <div class="no-faq-icon">✦</div>
+          <h3>{no_content_msg}</h3>
+          <p>Generate answers first using the button above.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    cat_counts = {}
+    for f in subset:
+        cat_counts[f["category"]] = cat_counts.get(f["category"], 0) + 1
+
+    # ── Stat cards row ────────────────────────────────────────────
+    cards_html = ""
+    for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
+        icon = _CAT_ICONS.get(cat, "📌")
+        label = cat.replace("WhatsApp: ", "")
+        cards_html += (
+            f'<div style="background:#1a1d2e;border:1px solid #2d3158;border-radius:10px;'
+            f'padding:14px 16px;min-width:150px;flex:1;max-width:220px">'
+            f'<div style="font-size:1.3rem">{icon}</div>'
+            f'<div style="font-size:1.5rem;font-weight:700;color:#A78BFA;margin:4px 0">{count}</div>'
+            f'<div style="font-size:0.72rem;color:#9CA3AF;line-height:1.4">{label}</div>'
+            f'</div>'
+        )
+    st.markdown(
+        f'<div style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 24px">{cards_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Per-category expanders ────────────────────────────────────
+    for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
+        icon = _CAT_ICONS.get(cat, "📌")
+        label = cat.replace("WhatsApp: ", "")
+        bucket = [f for f in subset if f["category"] == cat]
+        safe_key = cat.replace(" ", "_").replace(":", "")[:25]
+        with st.expander(f"{icon}  {label}  ·  {count} Q&As", expanded=False):
+            _render_faq_list(bucket, f"{tab_key}_{safe_key}", f"search_{tab_key}_{safe_key}")
+
 def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
     """Reusable search + category expanders for a subset of FAQs."""
     if not subset:
@@ -2793,69 +2883,24 @@ def render_faq():
 
         # ── Tab 1: Curated Convin Sense FAQ ───────────────────────────
         with tab_faq:
-            if faq_curated:
-                st.markdown(
-                    "<div style='font-size:0.78rem;color:#1E40AF;margin-bottom:16px;background:#EFF6FF;padding:10px 14px;border-radius:8px;border:1px solid #BFDBFE'>"
-                    "Curated Q&amp;As about <b style='color:#1D4ED8'>Convin Sense</b> — "
-                    "product features, capabilities, pricing &amp; how it works.</div>",
-                    unsafe_allow_html=True,
-                )
-                _render_faq_list(faq_curated, "faq", "search_faq")
-            elif faqs:
-                st.markdown("""
-                <div class="no-faq">
-                  <div class="no-faq-icon">✦</div>
-                  <h3>No Convin Sense FAQs found</h3>
-                  <p>Regenerate answers after adding the Convin product docs or pages.</p>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div class="no-faq">
-                  <div class="no-faq-icon">✦</div>
-                  <h3>Answer Studio is empty</h3>
-                  <p>Load at least one source in Settings,<br>
-                     then click <b>✨ Generate Answers</b> above.</p>
-                </div>
-                """, unsafe_allow_html=True)
+            _render_category_dashboard(
+                faq_curated, "faq",
+                no_content_msg="No Convin Sense FAQs found",
+            )
 
         # ── Tab 2: Full generic Q&A (docs + web) ─────────────────────
         with tab_generic:
-            if generic_faqs:
-                st.markdown(
-                    "<div style='font-size:0.78rem;color:#1E40AF;margin-bottom:16px;background:#EFF6FF;padding:10px 14px;border-radius:8px;border:1px solid #BFDBFE'>"
-                    "All Q&amp;As extracted from <b style='color:#1D4ED8'>documents</b> and "
-                    "<b style='color:#1D4ED8'>web pages</b> — covering every topic and category.</div>",
-                    unsafe_allow_html=True,
-                )
-                _render_faq_list(generic_faqs, "generic", "search_generic")
-            else:
-                st.markdown("""
-                <div class="no-faq">
-                  <div class="no-faq-icon">💡</div>
-                  <h3>No generic Q&As yet</h3>
-                  <p>Add documents or web links in Settings,<br>then click Generate Answers.</p>
-                </div>
-                """, unsafe_allow_html=True)
+            _render_category_dashboard(
+                generic_faqs, "generic",
+                no_content_msg="No Q&As yet — add docs or web links in Settings",
+            )
 
         # ── Tab 3: WhatsApp Q&As ──────────────────────────────────────
         with tab_wa:
-            if wa_faqs:
-                st.markdown(
-                    "<div style='font-size:0.78rem;color:#1E40AF;margin-bottom:16px;background:#EFF6FF;padding:10px 14px;border-radius:8px;border:1px solid #BFDBFE'>"
-                    "Q&amp;As extracted from <b style='color:#1D4ED8'>WhatsApp pilot conversations</b> — "
-                    "client metrics, issues, onboarding learnings &amp; bot performance.</div>",
-                    unsafe_allow_html=True,
-                )
-                _render_faq_list(wa_faqs, "wa", "search_wa")
-            else:
-                st.markdown("""
-                <div class="no-faq">
-                  <div class="no-faq-icon">💬</div>
-                  <h3>No WhatsApp Q&As yet</h3>
-                  <p>Upload a WhatsApp export in Settings,<br>then click Generate Answers.</p>
-                </div>
-                """, unsafe_allow_html=True)
+            _render_category_dashboard(
+                wa_faqs, "wa",
+                no_content_msg="No WhatsApp Q&As yet — upload a chat export in Settings",
+            )
 
     # ── Floating chat widget (always rendered, positioned via JS) ──
     _render_chat_float()
