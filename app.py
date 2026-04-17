@@ -987,30 +987,49 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 .cf-title { font-size:0.87rem; font-weight:700; color:#E5E7EB; }
 .cf-sub   { font-size:0.68rem; color:#6B7280; margin-top:1px; }
 .cf-msgs {
-    padding:12px 14px;
-    max-height:320px; min-height:60px;
-    overflow-y:auto; display:flex; flex-direction:column; gap:9px;
+    padding:14px 16px 8px;
+    height:calc(100dvh - 220px); min-height:80px;
+    overflow-y:auto; display:flex; flex-direction:column; gap:12px;
     scroll-behavior:smooth;
 }
 .cf-msgs::-webkit-scrollbar { width:3px; }
-.cf-msgs::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.35); border-radius:2px; }
+.cf-msgs::-webkit-scrollbar-track { background:transparent; }
+.cf-msgs::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.28); border-radius:2px; }
 .cf-user-bubble {
     align-self:flex-end;
-    background:linear-gradient(135deg,#7C3AED,#6D28D9);
-    color:#F3F4F6; font-size:0.82rem; line-height:1.5;
-    padding:9px 13px; border-radius:16px 16px 4px 16px;
-    max-width:88%; word-break:break-word;
+    background:linear-gradient(135deg,#7C3AED 0%,#6D28D9 100%);
+    color:#F5F3FF; font-size:0.84rem; line-height:1.55;
+    padding:10px 14px; border-radius:18px 18px 4px 18px;
+    max-width:84%; word-break:break-word;
+    box-shadow:0 2px 14px rgba(109,40,217,.45);
 }
 .cf-ai-bubble {
     align-self:flex-start;
-    background:rgba(26,34,52,0.9); color:#D1D5DB;
-    font-size:0.82rem; line-height:1.6;
-    padding:9px 13px; border-radius:16px 16px 16px 4px;
-    max-width:92%; border:1px solid rgba(255,255,255,0.06);
-    word-break:break-word;
+    background:rgba(18,24,42,0.92); color:#D4D8E2;
+    font-size:0.84rem; line-height:1.65;
+    padding:10px 14px; border-radius:18px 18px 18px 4px;
+    max-width:90%; border:1px solid rgba(99,102,241,.13);
+    word-break:break-word; box-shadow:0 2px 10px rgba(0,0,0,.25);
 }
-.cf-empty { text-align:center; padding:28px 14px; color:#6B7280; font-size:0.8rem; }
-.cf-empty-icon { font-size:1.7rem; margin-bottom:8px; opacity:0.55; display:block; }
+.cf-ts {
+    font-size:.62rem; color:rgba(156,163,175,.5);
+    margin-top:3px; text-align:right; padding-right:2px;
+}
+.cf-ai-ts { text-align:left; padding-left:2px; }
+.cf-empty {
+    text-align:center; padding:48px 20px 20px; color:#6B7280;
+    font-size:0.82rem; flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:6px;
+}
+.cf-empty-icon { font-size:2.2rem; margin-bottom:6px; opacity:0.5; display:block; }
+.cf-empty-title { font-size:.9rem; font-weight:700; color:#9CA3AF; margin-bottom:4px; }
+.cf-suggestion {
+    display:inline-block; margin:3px; padding:6px 12px;
+    background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.2);
+    border-radius:20px; font-size:.75rem; color:#A78BFA; cursor:pointer;
+    transition:background .15s;
+}
+.cf-suggestion:hover { background:rgba(99,102,241,.2); }
 /* FAB — Streamlit button override when sitting in the float container */
 .cf-fab-wrap button {
     width:58px !important; height:58px !important;
@@ -1850,7 +1869,7 @@ def generate_faqs(progress_cb=None) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════
 #  SHARED TOP NAV
 # ══════════════════════════════════════════════════════════════════
-def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False, show_client_btn=False):
+def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False, show_client_btn=False):  # noqa: ARG001 show_client_btn kept for compat
     docs, links, wa, pages = kb_stats()
     total = docs + links + wa + pages
     status_label = f"{total} sources loaded" if total else "No knowledge base"
@@ -1880,17 +1899,11 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
     # Streamlit buttons — functional nav row
     nav_spacer = st.container()
     with nav_spacer:
-        c_l, c_cli, c_faq, c_set = st.columns([4.2, 1.3, 1.3, 1.3])
+        c_l, c_faq, c_set = st.columns([5.5, 1.3, 1.3])
         if show_back_btn:
             with c_l:
                 if st.button("← Back to Answer Studio", key="back_btn", type="secondary"):
                     st.session_state.page = "faq"
-                    st.rerun()
-        if show_client_btn:
-            with c_cli:
-                if st.button("🎯 Client Engine", key="client_nav_btn", type="secondary",
-                             use_container_width=True):
-                    st.session_state.page = "client_qa"
                     st.rerun()
         if show_settings_btn:
             with c_faq:
@@ -1904,15 +1917,6 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
                     st.session_state.page = "settings"
                     st.rerun()
         if show_chat_btn:
-            chat_open = st.session_state.get("chat_open", False)
-            with c_faq:
-                btn_label = "✕ Chat" if chat_open else "💬 Chat"
-                if st.button(btn_label, key="chat_nav_btn", type="secondary",
-                             use_container_width=True):
-                    st.session_state.chat_open = not chat_open
-                    if not st.session_state.chat_open:
-                        st.session_state.chat_minimized = False
-                    st.rerun()
             with c_set:
                 if st.button("⚙ Settings", key="settings_btn_faq", type="secondary",
                              use_container_width=True):
@@ -2110,7 +2114,7 @@ def render_settings():
 
     # ── Tabs ────────────────────────────────────────────────────────
     t1, t2, t3, t3b, t4, t5, t6 = st.tabs([
-        "📄 Documents", "🌐 Web Links", "💬 WhatsApp", "📂 Real Life Q&A",
+        "📄 Documents", "🌐 Web Links", "📚 Client Use Cases", "📂 Real Life Q&A",
         "🕷️ Crawl Site", "⚙️ Preferences", "🎯 Client Engine",
     ])
 
@@ -4241,89 +4245,131 @@ def _render_mini_chat():
 
 def _render_chat_float():
     """Floating chat: FAB → full sidebar ↔ minimized bar.
-
-    Uses st.container(key=...) → .st-key-{key} CSS class for reliable fixed positioning.
-    States: chat_open=False (FAB) | open+minimized=False (panel) | open+minimized=True (bar)
+    3 states: closed (FAB) | open (panel) | minimized (bar at bottom-right)
     """
     chat_open = st.session_state.get("chat_open", False)
     chat_min  = st.session_state.get("chat_minimized", False)
 
-    # ── Global CSS ─────────────────────────────────────────────────
     st.markdown("""<style>
 @keyframes fab-pulse {
-  0%,100%{box-shadow:0 4px 24px rgba(139,92,246,.65),0 0 0 0 rgba(139,92,246,.35);}
-  50%     {box-shadow:0 4px 32px rgba(139,92,246,.8), 0 0 0 10px rgba(139,92,246,0);}
+  0%,100%{box-shadow:0 4px 24px rgba(139,92,246,.6),0 0 0 0 rgba(139,92,246,.3);}
+  50%     {box-shadow:0 4px 32px rgba(139,92,246,.85),0 0 0 12px rgba(139,92,246,0);}
 }
 @keyframes cf-slide-in{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
-@keyframes cf-min-up  {from{transform:translateY(100%)}to{transform:translateY(0)}}
-/* FAB */
+@keyframes cf-min-up{from{transform:translateY(110%)}to{transform:translateY(0)}}
+@keyframes cf-dot-blink{0%,80%,100%{opacity:0}40%{opacity:1}}
+
+/* ── FAB ── */
 .st-key-cf_fab_wrap{
-    position:fixed!important;bottom:32px!important;right:32px!important;
-    width:66px!important;z-index:999999!important;
+    position:fixed!important;bottom:28px!important;right:28px!important;
+    width:64px!important;z-index:999999!important;
     background:transparent!important;border:none!important;
     box-shadow:none!important;padding:0!important;
 }
 .st-key-cf_fab_wrap>div{padding:0!important;gap:0!important;}
 .st-key-cf_fab_wrap .stButton>button{
-    width:62px!important;height:62px!important;border-radius:50%!important;
-    font-size:1.55rem!important;padding:0!important;line-height:1!important;
-    background:linear-gradient(135deg,#8B5CF6,#6366F1 55%,#EC4899)!important;
+    width:60px!important;height:60px!important;border-radius:50%!important;
+    font-size:1.5rem!important;padding:0!important;line-height:1!important;
+    background:linear-gradient(135deg,#8B5CF6 0%,#6366F1 55%,#EC4899 100%)!important;
     border:none!important;color:#fff!important;
-    box-shadow:0 4px 24px rgba(139,92,246,.65)!important;
-    animation:fab-pulse 2.8s ease-in-out infinite!important;
-    transition:transform .2s cubic-bezier(.34,1.56,.64,1)!important;
+    box-shadow:0 4px 22px rgba(139,92,246,.65)!important;
+    animation:fab-pulse 3s ease-in-out infinite!important;
+    transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s!important;
 }
-.st-key-cf_fab_wrap .stButton>button:hover{transform:scale(1.12)!important;}
-/* Minimized bar */
+.st-key-cf_fab_wrap .stButton>button:hover{
+    transform:scale(1.1)!important;
+    box-shadow:0 6px 30px rgba(139,92,246,.8)!important;
+}
+
+/* ── Minimized bar ── */
 .st-key-cf_min_wrap{
-    position:fixed!important;bottom:0!important;right:32px!important;
-    width:260px!important;z-index:999997!important;
-    background:rgba(8,11,20,.95)!important;
-    border:1px solid rgba(99,102,241,.3)!important;border-bottom:none!important;
-    border-radius:12px 12px 0 0!important;
-    box-shadow:-4px -4px 24px rgba(0,0,0,.5)!important;
-    animation:cf-min-up .25s cubic-bezier(.4,0,.2,1) forwards!important;
+    position:fixed!important;bottom:0!important;right:28px!important;
+    width:252px!important;z-index:999997!important;
+    background:linear-gradient(180deg,rgba(18,15,35,.98),rgba(12,11,25,.99))!important;
+    border:1px solid rgba(99,102,241,.28)!important;border-bottom:none!important;
+    border-radius:14px 14px 0 0!important;
+    box-shadow:-2px -4px 28px rgba(0,0,0,.55),0 0 0 1px rgba(139,92,246,.06) inset!important;
+    animation:cf-min-up .22s cubic-bezier(.4,0,.2,1) forwards!important;
     padding:0!important;overflow:hidden!important;
 }
 .st-key-cf_min_wrap>div{padding:0!important;gap:0!important;}
 .st-key-cf_min_wrap .stButton>button{
-    height:34px!important;background:transparent!important;
-    border:none!important;transition:background .15s!important;
-    color:#9CA3AF!important;font-size:.78rem!important;padding:0 8px!important;
+    height:32px!important;background:transparent!important;
+    border:none!important;transition:background .12s,color .12s!important;
+    color:#6B7280!important;font-size:.75rem!important;padding:0 10px!important;
+    border-radius:0!important;
 }
-.st-key-cf_min_wrap .stButton>button:hover{background:rgba(99,102,241,.14)!important;color:#E5E7EB!important;}
-/* Panel */
+.st-key-cf_min_wrap .stButton>button:hover{
+    background:rgba(99,102,241,.12)!important;color:#C4B5FD!important;
+}
+
+/* ── Panel ── */
 .st-key-cf_panel_wrap{
     position:fixed!important;top:0!important;right:0!important;
-    width:390px!important;height:100dvh!important;z-index:999998!important;
-    background:rgba(8,11,20,.97)!important;
-    border-left:1px solid rgba(99,102,241,.22)!important;
+    width:400px!important;height:100dvh!important;z-index:999998!important;
+    background:linear-gradient(180deg,rgba(10,13,26,.99) 0%,rgba(8,10,22,1) 100%)!important;
+    border-left:1px solid rgba(99,102,241,.18)!important;
     border-radius:0!important;
-    box-shadow:-16px 0 56px rgba(0,0,0,.7)!important;
-    backdrop-filter:blur(28px)!important;
+    box-shadow:-20px 0 60px rgba(0,0,0,.75),0 0 0 1px rgba(99,102,241,.05) inset!important;
+    backdrop-filter:blur(32px) saturate(1.4)!important;
     overflow-y:auto!important;overflow-x:hidden!important;
-    animation:cf-slide-in .28s cubic-bezier(.4,0,.2,1) forwards!important;
-    padding:0!important;
+    animation:cf-slide-in .26s cubic-bezier(.4,0,.2,1) forwards!important;
+    padding:0!important;display:flex!important;flex-direction:column!important;
 }
 .st-key-cf_panel_wrap>div{padding:0!important;gap:0!important;}
-.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:last-child button{
-    height:38px!important;padding:0!important;
+/* Send button */
+.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:last-child .stButton>button{
+    height:40px!important;padding:0!important;border-radius:12px!important;
+    background:linear-gradient(135deg,#7C3AED,#6366F1)!important;
+    border:none!important;font-size:1.1rem!important;
+    box-shadow:0 2px 10px rgba(109,40,217,.4)!important;
+    transition:opacity .15s,transform .15s!important;
 }
+.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:last-child .stButton>button:hover{
+    opacity:.9!important;transform:scale(1.04)!important;
+}
+/* Action buttons (minimize / close) */
+.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:first-child .stButton>button,
+.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:nth-child(2) .stButton>button{
+    height:28px!important;padding:0 10px!important;font-size:.72rem!important;
+    background:rgba(255,255,255,.04)!important;
+    border:1px solid rgba(255,255,255,.07)!important;color:#6B7280!important;
+    border-radius:8px!important;transition:background .12s,color .12s!important;
+}
+.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:first-child .stButton>button:hover,
+.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:nth-child(2) .stButton>button:hover{
+    background:rgba(255,255,255,.09)!important;color:#E5E7EB!important;
+}
+/* Input */
 .st-key-cf_panel_wrap .stTextInput>div>div>input{
-    background:rgba(30,35,50,.8)!important;
-    border:1px solid rgba(99,102,241,.2)!important;color:#E5E7EB!important;
-    border-radius:10px!important;font-size:.85rem!important;
+    background:rgba(20,26,46,.85)!important;
+    border:1.5px solid rgba(99,102,241,.18)!important;
+    color:#E5E7EB!important;border-radius:12px!important;
+    font-size:.85rem!important;padding:9px 14px!important;
+    transition:border-color .2s,box-shadow .2s!important;
 }
 .st-key-cf_panel_wrap .stTextInput>div>div>input:focus{
-    border-color:rgba(99,102,241,.6)!important;
-    box-shadow:0 0 0 2px rgba(99,102,241,.15)!important;
+    border-color:rgba(99,102,241,.55)!important;
+    box-shadow:0 0 0 3px rgba(99,102,241,.12)!important;
+}
+.st-key-cf_panel_wrap .stTextInput>div>div>input::placeholder{color:#4B5563!important;}
+/* Clear button */
+.st-key-cf_panel_wrap .cf-clear-btn .stButton>button{
+    height:30px!important;font-size:.72rem!important;border-radius:8px!important;
+    color:#6B7280!important;background:transparent!important;
+    border:1px solid rgba(255,255,255,.06)!important;
+    transition:background .12s,color .12s!important;
+}
+.st-key-cf_panel_wrap .cf-clear-btn .stButton>button:hover{
+    background:rgba(220,38,38,.1)!important;color:#FCA5A5!important;
+    border-color:rgba(220,38,38,.2)!important;
 }
 </style>""", unsafe_allow_html=True)
 
     # ── State: FAB only ───────────────────────────────────────────
     if not chat_open:
         with st.container(key="cf_fab_wrap"):
-            if st.button("💬", key="cf_fab_open", help="Open chat"):
+            if st.button("💬", key="cf_fab_open", help="Open AI chat"):
                 st.session_state.chat_open      = True
                 st.session_state.chat_minimized = False
                 st.session_state.quick_q        = ""
@@ -4333,14 +4379,16 @@ def _render_chat_float():
     # ── State: minimized bar ──────────────────────────────────────
     if chat_min:
         history = st.session_state.get("chat_history", [])
-        badge = (f" <span style='background:rgba(139,92,246,.3);color:#C4B5FD;"
-                 f"font-size:.62rem;padding:1px 6px;border-radius:10px'>{len(history)}</span>"
-                 if history else "")
+        badge = ""
+        if history:
+            n = len(history)
+            badge = (f" <span style='background:rgba(139,92,246,.25);color:#A78BFA;"
+                     f"font-size:.6rem;padding:1px 7px;border-radius:10px;vertical-align:middle'>{n}</span>")
         with st.container(key="cf_min_wrap"):
             st.markdown(f"""
-<div style="display:flex;align-items:center;gap:10px;padding:0 14px;height:44px">
+<div style="display:flex;align-items:center;gap:10px;padding:0 14px;height:42px">
   <div style="width:8px;height:8px;border-radius:50%;background:#10B981;
-  box-shadow:0 0 6px #10B981;flex-shrink:0"></div>
+  box-shadow:0 0 7px #10B981;flex-shrink:0;animation:livepulse 2.5s ease-in-out infinite"></div>
   <span style="font-size:.82rem;font-weight:700;color:#C4B5FD;flex:1;
   letter-spacing:-.01em">AI Chat{badge}</span>
 </div>""", unsafe_allow_html=True)
@@ -4358,23 +4406,30 @@ def _render_chat_float():
 
     # ── State: full panel ─────────────────────────────────────────
     with st.container(key="cf_panel_wrap"):
+
         # Header
         st.markdown("""
-<div style="padding:18px 20px 12px;border-bottom:1px solid rgba(99,102,241,.14);
-background:linear-gradient(180deg,rgba(99,102,241,.08) 0%,transparent 100%)">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:3px">
-    <div style="width:9px;height:9px;border-radius:50%;background:#10B981;
-    box-shadow:0 0 8px #10B981"></div>
-    <div style="font-weight:800;font-size:.95rem;color:#E5E7EB;letter-spacing:-.01em">AI Chat</div>
-  </div>
-  <div style="font-size:.7rem;color:#4B5563;padding-left:19px">
-    Ask anything about Convin Sense · Powered by Claude
+<div style="padding:18px 20px 10px;flex-shrink:0;
+border-bottom:1px solid rgba(99,102,241,.12);
+background:linear-gradient(180deg,rgba(99,102,241,.07) 0%,transparent 100%)">
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:10px;height:10px;border-radius:50%;background:#10B981;
+      box-shadow:0 0 9px rgba(16,185,129,.8)"></div>
+      <div>
+        <div style="font-weight:800;font-size:.95rem;color:#F3F4F6;letter-spacing:-.015em;
+        line-height:1.2">AI Chat</div>
+        <div style="font-size:.65rem;color:#4B5563;margin-top:1px">
+          Convin Sense · Powered by Claude</div>
+      </div>
+    </div>
+    <div style="font-size:.6rem;color:#374151;padding-right:2px">— min &nbsp; ✕ close</div>
   </div>
 </div>""", unsafe_allow_html=True)
 
-        hc1, hc2 = st.columns([1, 1])
+        hc1, hc2, _hc3 = st.columns([1, 1, 3])
         with hc1:
-            if st.button("— Minimize", key="cf_minimize_btn", use_container_width=True):
+            if st.button("— Min", key="cf_minimize_btn", use_container_width=True):
                 st.session_state.chat_minimized = True
                 st.rerun()
         with hc2:
@@ -4388,25 +4443,39 @@ background:linear-gradient(180deg,rgba(99,102,241,.08) 0%,transparent 100%)">
         if history:
             msgs_html = ""
             for msg in history[-20:]:
-                c = msg["content"]
+                c   = msg["content"]
+                ts  = msg.get("ts", "")
                 if msg["role"] == "user":
-                    safe = c.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>")
-                    msgs_html += f'<div class="cf-user-bubble">{safe}</div>'
+                    safe = (c.replace("&","&amp;").replace("<","&lt;")
+                              .replace(">","&gt;").replace("\n","<br>"))
+                    msgs_html += (f'<div class="cf-user-bubble">{safe}'
+                                  f'<div class="cf-ts">{ts}</div></div>')
                 else:
-                    msgs_html += f'<div class="cf-ai-bubble">{c}</div>'
+                    msgs_html += (f'<div class="cf-ai-bubble">{c}'
+                                  f'<div class="cf-ts cf-ai-ts">{ts}</div></div>')
             st.markdown(f'<div class="cf-msgs">{msgs_html}</div>', unsafe_allow_html=True)
         else:
             st.markdown("""
 <div class="cf-msgs">
   <div class="cf-empty">
     <span class="cf-empty-icon">✦</span>
-    Ask me anything about Convin Sense.
+    <div class="cf-empty-title">Ask me anything</div>
+    <div style="color:#4B5563;font-size:.75rem;line-height:1.6;max-width:240px">
+      Connectivity rates, bot config, client onboarding,<br>qualification flows &amp; more.
+    </div>
+    <div style="margin-top:14px;line-height:2">
+      <span class="cf-suggestion">What is Convin Sense?</span>
+      <span class="cf-suggestion">Typical connectivity rate?</span>
+      <span class="cf-suggestion">How does handoff work?</span>
+    </div>
   </div>
 </div>""", unsafe_allow_html=True)
 
         stream_ph = st.empty()
 
-        st.markdown('<div style="border-top:1px solid rgba(99,102,241,.12);padding:10px 12px">', unsafe_allow_html=True)
+        # Input row
+        st.markdown('<div style="border-top:1px solid rgba(99,102,241,.1);'
+                    'padding:10px 14px 12px;flex-shrink:0">', unsafe_allow_html=True)
         in_col, send_col = st.columns([5, 1])
         with in_col:
             pre = st.session_state.get("quick_q", "")
@@ -4431,7 +4500,7 @@ background:linear-gradient(180deg,rgba(99,102,241,.08) 0%,transparent 100%)">
             st.rerun()
 
         if history:
-            st.markdown('<div style="padding:4px 12px 12px">', unsafe_allow_html=True)
+            st.markdown('<div class="cf-clear-btn" style="padding:0 14px 10px">', unsafe_allow_html=True)
             if st.button("🗑 Clear chat", key="cf_clear", type="secondary", use_container_width=True):
                 st.session_state.chat_history = []
                 st.session_state["_mini_last"] = ""
@@ -4481,7 +4550,7 @@ def render_faq():
             f'<div class="lp-stats">'
             f'<div class="lp-stat lp-stat-v"><span class="n">{len(faq_curated)}</span><div class="l">Curated FAQ</div></div>'
             f'<div class="lp-stat lp-stat-p"><span class="n">{len(generic_faqs)}</span><div class="l">Q&amp;A Pairs</div></div>'
-            f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_faqs)}</span><div class="l">WhatsApp Q&amp;A</div></div>'
+            f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_faqs)}</span><div class="l">Client Use Cases</div></div>'
             f'<div class="lp-stat lp-stat-g"><span class="n">{len(rlqa_qas)}</span><div class="l">Real Life Q&amp;A</div></div>'
             f'<div class="lp-stat lp-stat-g"><span class="n">{total}</span><div class="l">KB Sources</div></div>'
             f'</div>'
@@ -4493,7 +4562,7 @@ def render_faq():
         tab_faq, tab_generic, tab_wa, tab_rlqa, tab_flow = st.tabs([
             f"📋  FAQ  ({len(faq_curated)})",
             f"💡  Q&A  ({len(generic_faqs)})",
-            f"💬  WhatsApp  ({len(wa_faqs)})",
+            f"📚  Client Use Cases  ({len(wa_faqs)})",
             f"📂  Real Life Q&A  ({len(rlqa_qas)})",
             f"🗺️  Process Flow",
         ])
