@@ -986,52 +986,63 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
     box-shadow:0 0 6px rgba(16,185,129,0.7); animation:livepulse 3s ease-in-out infinite; }
 .cf-title { font-size:0.87rem; font-weight:700; color:#E5E7EB; }
 .cf-sub   { font-size:0.68rem; color:#6B7280; margin-top:1px; }
+@keyframes cf-msg-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 .cf-msgs {
-    padding:14px 16px 8px;
-    height:calc(100dvh - 290px); min-height:80px;
-    overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+    flex:1; min-height:0; padding:16px 14px 10px;
+    overflow-y:auto; display:flex; flex-direction:column; gap:10px;
     scroll-behavior:smooth;
 }
 .cf-msgs::-webkit-scrollbar { width:3px; }
 .cf-msgs::-webkit-scrollbar-track { background:transparent; }
-.cf-msgs::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.28); border-radius:2px; }
+.cf-msgs::-webkit-scrollbar-thumb { background:rgba(99,102,241,.22); border-radius:2px; }
 .cf-user-bubble {
     align-self:flex-end;
-    background:linear-gradient(135deg,#7C3AED 0%,#6D28D9 100%);
-    color:#FFFFFF !important; font-size:0.84rem; line-height:1.55;
-    padding:10px 14px; border-radius:18px 18px 4px 18px;
-    max-width:84%; word-break:break-word;
-    box-shadow:0 2px 14px rgba(109,40,217,.45);
+    background:linear-gradient(135deg,#7C3AED,#5B21B6);
+    color:#fff !important; font-size:.84rem; line-height:1.6;
+    padding:10px 14px 8px; border-radius:18px 18px 4px 18px;
+    max-width:82%; word-break:break-word;
+    box-shadow:0 3px 16px rgba(109,40,217,.35);
+    animation:cf-msg-in .18s ease forwards;
 }
-.cf-user-bubble * { color:#FFFFFF !important; }
+.cf-user-bubble * { color:#fff !important; }
 .cf-ai-bubble {
     align-self:flex-start;
-    background:rgba(35,40,60,0.95); color:#FFFFFF !important;
-    font-size:0.84rem; line-height:1.65;
-    padding:10px 14px; border-radius:18px 18px 18px 4px;
-    max-width:90%; border:1px solid rgba(99,102,241,.2);
-    word-break:break-word; box-shadow:0 2px 10px rgba(0,0,0,.25);
+    background:#161A2E; color:#E5E7EB !important;
+    font-size:.84rem; line-height:1.68;
+    padding:10px 14px 8px; border-radius:4px 18px 18px 18px;
+    max-width:88%; border:1px solid rgba(99,102,241,.15);
+    word-break:break-word; box-shadow:0 2px 12px rgba(0,0,0,.28);
+    animation:cf-msg-in .18s ease forwards;
 }
-.cf-ai-bubble * { color:#FFFFFF !important; }
+.cf-ai-bubble * { color:#E5E7EB !important; }
+.cf-ai-bubble strong { color:#C4B5FD !important; font-weight:600; }
+.cf-ai-bubble em { color:#93C5FD !important; }
+.cf-ai-bubble code {
+    background:rgba(99,102,241,.14); color:#C4B5FD !important;
+    font-size:.76rem; padding:1px 6px; border-radius:4px; font-family:monospace;
+}
+.cf-ai-bubble ol,.cf-ai-bubble ul { margin:6px 0 4px 16px; padding:0; }
+.cf-ai-bubble li { margin-bottom:3px; color:#E5E7EB !important; }
 .cf-ts {
-    font-size:.62rem; color:rgba(156,163,175,.5);
-    margin-top:3px; text-align:right; padding-right:2px;
+    font-size:.6rem; color:rgba(156,163,175,.38);
+    margin-top:5px; text-align:right;
 }
-.cf-ai-ts { text-align:left; padding-left:2px; }
+.cf-ai-ts { text-align:left; }
 .cf-empty {
-    text-align:center; padding:48px 20px 20px; color:#6B7280;
-    font-size:0.82rem; flex:1; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:6px;
+    flex:1; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    text-align:center; padding:20px; gap:6px;
 }
-.cf-empty-icon { font-size:2.2rem; margin-bottom:6px; opacity:0.5; display:block; }
-.cf-empty-title { font-size:.9rem; font-weight:700; color:#9CA3AF; margin-bottom:4px; }
+.cf-empty-icon { font-size:2.4rem; opacity:.3; margin-bottom:8px; display:block; }
+.cf-empty-title { font-size:.92rem; font-weight:700; color:#6B7280; margin-bottom:4px; }
+.cf-empty-sub { font-size:.74rem; color:#374151; line-height:1.65; max-width:220px; }
 .cf-suggestion {
-    display:inline-block; margin:3px; padding:6px 12px;
-    background:rgba(99,102,241,.1); border:1px solid rgba(99,102,241,.2);
-    border-radius:20px; font-size:.75rem; color:#A78BFA; cursor:pointer;
-    transition:background .15s;
+    display:inline-block; margin:3px; padding:5px 13px;
+    background:rgba(99,102,241,.08); border:1px solid rgba(99,102,241,.18);
+    border-radius:20px; font-size:.73rem; color:#818CF8;
+    transition:background .15s, border-color .15s;
 }
-.cf-suggestion:hover { background:rgba(99,102,241,.2); }
+.cf-suggestion:hover { background:rgba(99,102,241,.16); border-color:rgba(99,102,241,.32); }
 /* FAB — Streamlit button override when sitting in the float container */
 .cf-fab-wrap button {
     width:58px !important; height:58px !important;
@@ -4535,141 +4546,138 @@ def _render_chat_float():
     chat_min  = st.session_state.get("chat_minimized", False)
 
     st.markdown("""<style>
-@keyframes fab-pulse {
-  0%,100%{box-shadow:0 6px 32px rgba(139,92,246,.75),0 0 0 0 rgba(236,72,153,.4);}
-  50%     {box-shadow:0 8px 42px rgba(139,92,246,1),0 0 0 14px rgba(236,72,153,0);}
+@keyframes fab-pulse{
+  0%,100%{box-shadow:0 6px 32px rgba(139,92,246,.75),0 0 0 0 rgba(236,72,153,.35);}
+  55%{box-shadow:0 8px 44px rgba(139,92,246,1),0 0 0 14px rgba(236,72,153,0);}
 }
-@keyframes fab-glow {
-  0%,100%{opacity:1;} 50%{opacity:.82;}
-}
-@keyframes cf-slide-in{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes cf-slide-in{from{transform:translateX(102%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes cf-min-up{from{transform:translateY(110%)}to{transform:translateY(0)}}
-@keyframes cf-dot-blink{0%,80%,100%{opacity:0}40%{opacity:1}}
 
 /* ── FAB ── */
 .st-key-cf_fab_wrap{
     position:fixed!important;bottom:28px!important;right:24px!important;
     width:160px!important;z-index:999999!important;
-    background:transparent!important;border:none!important;
-    box-shadow:none!important;padding:0!important;
+    background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;
 }
 .st-key-cf_fab_wrap>div{padding:0!important;gap:0!important;}
 .st-key-cf_fab_wrap .stButton>button{
-    width:160px!important;height:52px!important;border-radius:30px!important;
-    font-size:1rem!important;font-weight:700!important;letter-spacing:.4px!important;
-    padding:0 20px!important;line-height:1!important;
-    background:linear-gradient(135deg,#7C3AED 0%,#6366F1 40%,#EC4899 100%)!important;
+    width:160px!important;height:50px!important;border-radius:28px!important;
+    font-size:.96rem!important;font-weight:700!important;letter-spacing:.3px!important;
+    padding:0 20px!important;
+    background:linear-gradient(135deg,#7C3AED 0%,#6366F1 45%,#EC4899 100%)!important;
     border:none!important;color:#fff!important;
-    box-shadow:0 6px 28px rgba(139,92,246,.8),0 2px 8px rgba(236,72,153,.5)!important;
+    box-shadow:0 6px 28px rgba(139,92,246,.8),0 2px 8px rgba(236,72,153,.45)!important;
     animation:fab-pulse 2.8s ease-in-out infinite!important;
     transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s!important;
 }
 .st-key-cf_fab_wrap .stButton>button:hover{
     transform:scale(1.06) translateY(-2px)!important;
-    box-shadow:0 10px 40px rgba(139,92,246,1),0 4px 16px rgba(236,72,153,.7)!important;
+    box-shadow:0 10px 40px rgba(139,92,246,1),0 4px 16px rgba(236,72,153,.65)!important;
 }
 
 /* ── Minimized bar ── */
 .st-key-cf_min_wrap{
     position:fixed!important;bottom:0!important;right:28px!important;
-    width:252px!important;z-index:999997!important;
-    background:linear-gradient(180deg,rgba(18,15,35,.98),rgba(12,11,25,.99))!important;
-    border:1px solid rgba(99,102,241,.28)!important;border-bottom:none!important;
-    border-radius:14px 14px 0 0!important;
-    box-shadow:-2px -4px 28px rgba(0,0,0,.55),0 0 0 1px rgba(139,92,246,.06) inset!important;
-    animation:cf-min-up .22s cubic-bezier(.4,0,.2,1) forwards!important;
+    width:240px!important;z-index:999997!important;
+    background:#0E1120!important;
+    border:1px solid rgba(99,102,241,.22)!important;border-bottom:none!important;
+    border-radius:12px 12px 0 0!important;
+    box-shadow:-2px -4px 24px rgba(0,0,0,.5)!important;
+    animation:cf-min-up .2s cubic-bezier(.4,0,.2,1) forwards!important;
     padding:0!important;overflow:hidden!important;
 }
 .st-key-cf_min_wrap>div{padding:0!important;gap:0!important;}
 .st-key-cf_min_wrap .stButton>button{
-    height:32px!important;background:transparent!important;
-    border:none!important;transition:background .12s,color .12s!important;
-    color:#6B7280!important;font-size:.75rem!important;padding:0 10px!important;
-    border-radius:0!important;
+    height:30px!important;background:transparent!important;
+    border:none!important;color:#6B7280!important;font-size:.73rem!important;
+    padding:0 10px!important;border-radius:0!important;
+    transition:background .12s,color .12s!important;
 }
-.st-key-cf_min_wrap .stButton>button:hover{
-    background:rgba(99,102,241,.12)!important;color:#C4B5FD!important;
-}
+.st-key-cf_min_wrap .stButton>button:hover{background:rgba(99,102,241,.1)!important;color:#C4B5FD!important;}
 
-/* ── Panel ── */
+/* ── Panel shell ── */
 .st-key-cf_panel_wrap{
     position:fixed!important;top:0!important;right:0!important;
-    width:400px!important;height:100dvh!important;z-index:999998!important;
-    background:linear-gradient(180deg,rgba(10,13,26,.99) 0%,rgba(8,10,22,1) 100%)!important;
-    border-left:1px solid rgba(99,102,241,.18)!important;
-    border-radius:0!important;
-    box-shadow:-20px 0 60px rgba(0,0,0,.75),0 0 0 1px rgba(99,102,241,.05) inset!important;
-    backdrop-filter:blur(32px) saturate(1.4)!important;
-    overflow-y:auto!important;overflow-x:hidden!important;
-    animation:cf-slide-in .26s cubic-bezier(.4,0,.2,1) forwards!important;
-    padding:0!important;display:flex!important;flex-direction:column!important;
+    width:390px!important;height:100dvh!important;z-index:999998!important;
+    background:#0B0D1C!important;
+    border-left:1px solid rgba(99,102,241,.13)!important;
+    box-shadow:-24px 0 80px rgba(0,0,0,.88)!important;
+    animation:cf-slide-in .24s cubic-bezier(.4,0,.2,1) forwards!important;
+    overflow:hidden!important;padding:0!important;
+    display:flex!important;flex-direction:column!important;
 }
-.st-key-cf_panel_wrap>div{padding:0!important;gap:0!important;}
-/* Send button */
-.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:last-child .stButton>button{
-    height:40px!important;padding:0!important;border-radius:12px!important;
-    background:linear-gradient(135deg,#7C3AED,#6366F1)!important;
-    border:none!important;font-size:1.1rem!important;
-    box-shadow:0 2px 10px rgba(109,40,217,.4)!important;
-    transition:opacity .15s,transform .15s!important;
-}
-.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:last-child .stButton>button:hover{
-    opacity:.9!important;transform:scale(1.04)!important;
-}
-/* Action buttons (minimize / close) */
-.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:first-child .stButton>button,
-.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:nth-child(2) .stButton>button{
-    height:28px!important;padding:0 10px!important;font-size:.72rem!important;
+.st-key-cf_panel_wrap>div{padding:0!important;gap:0!important;height:100%!important;display:flex!important;flex-direction:column!important;}
+
+/* Header action buttons */
+.st-key-cf_hdr .stButton>button,
+.st-key-cf_panel_wrap .cf-hdr .stButton>button{
+    height:26px!important;font-size:.7rem!important;font-weight:500!important;
+    padding:0 10px!important;border-radius:7px!important;
     background:rgba(255,255,255,.04)!important;
-    border:1px solid rgba(255,255,255,.07)!important;color:#6B7280!important;
-    border-radius:8px!important;transition:background .12s,color .12s!important;
+    border:1px solid rgba(255,255,255,.07)!important;
+    color:#9CA3AF!important;
+    transition:all .15s!important;
 }
-.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:first-child .stButton>button:hover,
-.st-key-cf_panel_wrap [data-testid="stColumns"] [data-testid="column"]:nth-child(2) .stButton>button:hover{
-    background:rgba(255,255,255,.09)!important;color:#E5E7EB!important;
+.st-key-cf_hdr [data-testid="column"]:first-child .stButton>button:hover,
+.st-key-cf_panel_wrap .cf-hdr [data-testid="column"]:first-child .stButton>button:hover{
+    background:rgba(99,102,241,.14)!important;color:#C4B5FD!important;border-color:rgba(99,102,241,.28)!important;
 }
-/* Input */
+.st-key-cf_hdr [data-testid="column"]:nth-child(2) .stButton>button:hover,
+.st-key-cf_panel_wrap .cf-hdr [data-testid="column"]:nth-child(2) .stButton>button:hover{
+    background:rgba(239,68,68,.1)!important;color:#FCA5A5!important;border-color:rgba(239,68,68,.2)!important;
+}
+
+/* Input form */
+.st-key-cf_panel_wrap [data-testid="stForm"]{
+    border:none!important;background:transparent!important;padding:0!important;
+    flex-shrink:0!important;
+}
+.st-key-cf_panel_wrap [data-testid="stForm"]>div{
+    border-top:1px solid rgba(99,102,241,.1)!important;
+    padding:10px 14px 14px!important;background:rgba(7,9,20,.7)!important;
+}
 .st-key-cf_panel_wrap .stTextInput>div>div>input{
-    background:rgba(20,26,46,.85)!important;
-    border:1.5px solid rgba(99,102,241,.18)!important;
-    color:#E5E7EB!important;border-radius:12px!important;
-    font-size:.85rem!important;padding:9px 14px!important;
+    background:rgba(18,22,42,.95)!important;
+    border:1.5px solid rgba(99,102,241,.16)!important;
+    color:#E5E7EB!important;border-radius:14px!important;
+    font-size:.84rem!important;padding:10px 14px!important;
     transition:border-color .2s,box-shadow .2s!important;
 }
 .st-key-cf_panel_wrap .stTextInput>div>div>input:focus{
-    border-color:rgba(99,102,241,.55)!important;
-    box-shadow:0 0 0 3px rgba(99,102,241,.12)!important;
+    border-color:rgba(99,102,241,.48)!important;
+    box-shadow:0 0 0 3px rgba(99,102,241,.09)!important;outline:none!important;
 }
-.st-key-cf_panel_wrap .stTextInput>div>div>input::placeholder{color:#4B5563!important;}
-/* Ensure all text in the panel is visible white */
+.st-key-cf_panel_wrap .stTextInput>div>div>input::placeholder{color:#374151!important;}
+/* Send button */
+.st-key-cf_panel_wrap [data-testid="stFormSubmitButton"]>button{
+    height:42px!important;padding:0 14px!important;border-radius:14px!important;
+    background:linear-gradient(135deg,#7C3AED,#6366F1)!important;
+    border:none!important;font-size:.95rem!important;font-weight:700!important;color:#fff!important;
+    box-shadow:0 3px 14px rgba(99,102,241,.42)!important;
+    transition:opacity .15s,transform .15s!important;
+}
+.st-key-cf_panel_wrap [data-testid="stFormSubmitButton"]>button:hover{
+    opacity:.88!important;transform:scale(1.05)!important;
+}
+
+/* Clear button */
+.cf-clear-wrap .stButton>button{
+    height:28px!important;font-size:.71rem!important;
+    background:transparent!important;border:1px solid rgba(255,255,255,.06)!important;
+    color:#4B5563!important;border-radius:8px!important;
+    transition:all .15s!important;
+}
+.cf-clear-wrap .stButton>button:hover{
+    background:rgba(239,68,68,.08)!important;color:#FCA5A5!important;border-color:rgba(239,68,68,.18)!important;
+}
+
+/* Text visibility */
 .st-key-cf_panel_wrap p,
 .st-key-cf_panel_wrap li,
 .st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] p,
 .st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] li,
-.st-key-cf_panel_wrap [data-testid="stEmpty"] p,
-.st-key-cf_panel_wrap [data-testid="stEmpty"] li { color:#FFFFFF!important; }
-.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] strong,
-.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] em { color:#FFFFFF!important; }
-/* Form wrapper — remove default form styling */
-.st-key-cf_panel_wrap [data-testid="stForm"]{
-    border:none!important;background:transparent!important;
-    padding:0!important;border-radius:0!important;
-}
-.st-key-cf_panel_wrap [data-testid="stForm"]>div{
-    border-top:1px solid rgba(99,102,241,.1)!important;
-    padding:10px 14px 12px!important;
-}
-/* Clear button */
-.st-key-cf_panel_wrap .cf-clear-btn .stButton>button{
-    height:30px!important;font-size:.72rem!important;border-radius:8px!important;
-    color:#6B7280!important;background:transparent!important;
-    border:1px solid rgba(255,255,255,.06)!important;
-    transition:background .12s,color .12s!important;
-}
-.st-key-cf_panel_wrap .cf-clear-btn .stButton>button:hover{
-    background:rgba(220,38,38,.1)!important;color:#FCA5A5!important;
-    border-color:rgba(220,38,38,.2)!important;
-}
+.st-key-cf_panel_wrap [data-testid="stEmpty"] p { color:#E5E7EB!important; }
+.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] strong { color:#C4B5FD!important; }
 </style>""", unsafe_allow_html=True)
 
     # ── State: FAB only ───────────────────────────────────────────
@@ -4713,63 +4721,97 @@ def _render_chat_float():
     # ── State: full panel ─────────────────────────────────────────
     with st.container(key="cf_panel_wrap"):
 
-        # Header
+        # ── Header ────────────────────────────────────────────────
         st.markdown("""
-<div style="padding:18px 20px 10px;flex-shrink:0;
-border-bottom:1px solid rgba(99,102,241,.12);
-background:linear-gradient(180deg,rgba(99,102,241,.07) 0%,transparent 100%)">
-  <div style="display:flex;align-items:center;justify-content:space-between">
-    <div style="display:flex;align-items:center;gap:10px">
-      <div style="width:10px;height:10px;border-radius:50%;background:#10B981;
-      box-shadow:0 0 9px rgba(16,185,129,.8)"></div>
-      <div>
-        <div style="font-weight:800;font-size:.95rem;color:#F3F4F6;letter-spacing:-.015em;
-        line-height:1.2">AI Chat</div>
-        <div style="font-size:.65rem;color:#4B5563;margin-top:1px">
-          Convin Sense · Powered by Claude</div>
+<div style="padding:14px 16px 10px;flex-shrink:0;
+background:linear-gradient(135deg,rgba(124,58,237,.1) 0%,rgba(99,102,241,.04) 100%);
+border-bottom:1px solid rgba(99,102,241,.11)">
+  <div style="display:flex;align-items:center;gap:11px">
+    <div style="width:36px;height:36px;border-radius:11px;flex-shrink:0;
+    background:linear-gradient(135deg,#7C3AED,#6366F1);
+    display:flex;align-items:center;justify-content:center;font-size:1.05rem;
+    box-shadow:0 3px 12px rgba(99,102,241,.45)">🤖</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:.9rem;font-weight:700;color:#F3F4F6;line-height:1.2;
+      letter-spacing:-.01em">Convin AI</div>
+      <div style="font-size:.63rem;color:#6B7280;margin-top:2px;display:flex;align-items:center;gap:5px">
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;
+        background:#10B981;box-shadow:0 0 5px rgba(16,185,129,.6)"></span>
+        Support Agent · Claude
       </div>
     </div>
-    <div style="font-size:.6rem;color:#374151;padding-right:2px">— min &nbsp; ✕ close</div>
   </div>
 </div>""", unsafe_allow_html=True)
 
-        hc1, hc2, _hc3 = st.columns([1, 1, 3])
-        with hc1:
-            if st.button("— Min", key="cf_minimize_btn", use_container_width=True):
-                st.session_state.chat_minimized = True
-                st.rerun()
-        with hc2:
-            if st.button("✕ Close", key="cf_panel_close", use_container_width=True):
-                st.session_state.chat_open      = False
-                st.session_state.chat_minimized = False
-                st.rerun()
+        with st.container(key="cf_hdr"):
+            hc1, hc2, _hc3 = st.columns([1, 1, 2])
+            with hc1:
+                if st.button("⊖ Minimize", key="cf_minimize_btn", use_container_width=True):
+                    st.session_state.chat_minimized = True
+                    st.rerun()
+            with hc2:
+                if st.button("✕ Close", key="cf_panel_close", use_container_width=True):
+                    st.session_state.chat_open      = False
+                    st.session_state.chat_minimized = False
+                    st.rerun()
 
-        # Messages
+        # ── Messages ──────────────────────────────────────────────
         history = st.session_state.get("chat_history", [])
+
+        def _md(text: str) -> str:
+            """Minimal markdown → HTML for AI bubbles."""
+            text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+            text = re.sub(r"\*(.+?)\*",   r"<em>\1</em>",           text)
+            text = re.sub(r"`(.+?)`",     r"<code>\1</code>",       text)
+            lines, in_ol, in_ul, out = text.split("\n"), False, False, []
+            for ln in lines:
+                m = re.match(r"^(\d+)\.\s(.+)$", ln)
+                b = re.match(r"^[-•]\s(.+)$", ln)
+                if m:
+                    if not in_ol: out.append("<ol>"); in_ol = True
+                    if in_ul:     out.append("</ul>"); in_ul = False
+                    out.append(f"<li>{m.group(2)}</li>")
+                elif b:
+                    if not in_ul: out.append("<ul>"); in_ul = True
+                    if in_ol:     out.append("</ol>"); in_ol = False
+                    out.append(f"<li>{b.group(1)}</li>")
+                else:
+                    if in_ol: out.append("</ol>"); in_ol = False
+                    if in_ul: out.append("</ul>"); in_ul = False
+                    out.append(ln if not ln.strip() else ln + "<br>")
+            if in_ol: out.append("</ol>")
+            if in_ul: out.append("</ul>")
+            return "".join(out)
+
         if history:
             msgs_html = ""
-            for msg in history[-20:]:
-                c   = msg["content"]
-                ts  = msg.get("ts", "")
+            for msg in history[-24:]:
+                c  = msg["content"]
+                ts = msg.get("ts", "")
                 if msg["role"] == "user":
                     safe = (c.replace("&","&amp;").replace("<","&lt;")
                               .replace(">","&gt;").replace("\n","<br>"))
                     msgs_html += (f'<div class="cf-user-bubble">{safe}'
                                   f'<div class="cf-ts">{ts}</div></div>')
                 else:
-                    msgs_html += (f'<div class="cf-ai-bubble">{c}'
+                    msgs_html += (f'<div class="cf-ai-bubble">{_md(c)}'
                                   f'<div class="cf-ts cf-ai-ts">{ts}</div></div>')
-            st.markdown(f'<div class="cf-msgs">{msgs_html}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="cf-msgs" id="cf-msgs-box">{msgs_html}'
+                f'<div id="cf-bottom"></div></div>'
+                f'<script>(function(){{var e=document.getElementById("cf-msgs-box");'
+                f'if(e)e.scrollTop=e.scrollHeight;}})();</script>',
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown("""
 <div class="cf-msgs">
   <div class="cf-empty">
-    <span class="cf-empty-icon">✦</span>
-    <div class="cf-empty-title">Ask me anything</div>
-    <div style="color:#4B5563;font-size:.75rem;line-height:1.6;max-width:240px">
-      Connectivity rates, bot config, client onboarding,<br>qualification flows &amp; more.
-    </div>
-    <div style="margin-top:14px;line-height:2">
+    <span class="cf-empty-icon">🤖</span>
+    <div class="cf-empty-title">Hi! I'm Convin AI</div>
+    <div class="cf-empty-sub">Ask me anything about Convin Sense — bot config, connectivity, handoffs, pricing, and more.</div>
+    <div style="margin-top:16px;line-height:2.2">
       <span class="cf-suggestion">What is Convin Sense?</span>
       <span class="cf-suggestion">Typical connectivity rate?</span>
       <span class="cf-suggestion">How does handoff work?</span>
@@ -4784,16 +4826,16 @@ background:linear-gradient(180deg,rgba(99,102,241,.07) 0%,transparent 100%)">
             st.session_state["cf_text_input"] = st.session_state.quick_q
             st.session_state.quick_q = ""
 
-        # Input form — clear_on_submit clears the field after send
+        # ── Input form ────────────────────────────────────────────
         with st.form("cf_chat_form", clear_on_submit=True, border=False):
             in_col, send_col = st.columns([5, 1])
             with in_col:
                 user_input = st.text_input(
-                    "cf_msg", placeholder="Ask a question…",
+                    "cf_msg", placeholder="Type your question…",
                     label_visibility="collapsed", key="cf_text_input",
                 )
             with send_col:
-                send_btn = st.form_submit_button("↵")
+                send_btn = st.form_submit_button("➤")
 
         if send_btn:
             active = (user_input or "").strip()
@@ -4806,12 +4848,13 @@ background:linear-gradient(180deg,rgba(99,102,241,.07) 0%,transparent 100%)">
                 stream_ph.empty()
                 st.rerun()
 
+        # ── Clear button ──────────────────────────────────────────
         if history:
-            st.markdown('<div class="cf-clear-btn" style="padding:0 14px 10px">', unsafe_allow_html=True)
-            if st.button("🗑 Clear chat", key="cf_clear", type="secondary", use_container_width=True):
+            st.markdown('<div class="cf-clear-wrap" style="padding:2px 14px 12px">', unsafe_allow_html=True)
+            if st.button("🗑  Clear chat", key="cf_clear", use_container_width=True):
                 st.session_state.chat_history = []
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_faq():
