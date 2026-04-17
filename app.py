@@ -2815,64 +2815,6 @@ def render_faq():
             unsafe_allow_html=True,
         )
 
-        # ── Action bar ────────────────────────────────────────────────
-        ab1, ab2 = st.columns([3, 2])
-        with ab1:
-            gen_btn = st.button(
-                "✨ Generate Answers" if not faqs else "🔄 Regenerate Answers",
-                type="primary", use_container_width=True, disabled=(total == 0),
-            )
-        with ab2:
-            if faqs and st.button("🗑️ Clear All", use_container_width=True):
-                st.session_state.kb_faqs = []
-                save_kb(); st.rerun()
-        if total == 0:
-            st.info("Add documents or links from Settings first, then click Generate.")
-
-        # ── Generate ──────────────────────────────────────────────────
-        if gen_btn:
-            prog_ph   = st.empty()
-            status_ph = st.empty()
-
-            docs_n  = len(st.session_state.get("kb_documents", []))
-            links_n = len(st.session_state.get("kb_links", [])) + len(st.session_state.get("kb_crawled", []))
-            wa_n    = len(st.session_state.get("kb_whatsapp", []))
-            passes  = sum(1 for x in [docs_n, links_n, wa_n] if x > 0)
-
-            status_ph.markdown(
-                f"<span style='color:#A78BFA;font-size:0.85rem'>"
-                f"🤖 Running {passes} extraction pass(es) across all sources — "
-                f"building your Answer Studio…</span>",
-                unsafe_allow_html=True,
-            )
-            prog_ph.progress(0.05)
-
-            def _progress(pct, label):
-                prog_ph.progress(pct)
-                status_ph.markdown(
-                    f"<span style='color:#A78BFA;font-size:0.85rem'>{label}</span>",
-                    unsafe_allow_html=True,
-                )
-
-            try:
-                new_faqs = generate_faqs(progress_cb=_progress)
-                prog_ph.progress(1.0)
-                if new_faqs:
-                    st.session_state.kb_faqs = new_faqs
-                    save_kb()
-                    prog_ph.empty()
-                    n_cats = len(set(f["category"] for f in new_faqs))
-                    status_ph.success(
-                        f"✅ {len(new_faqs)} answers generated across {n_cats} categories — saved to Answer Studio!"
-                    )
-                    st.rerun()
-                else:
-                    prog_ph.empty()
-                    status_ph.warning("No answers extracted. Try adding more content.")
-            except Exception as e:
-                prog_ph.empty()
-                status_ph.error(f"Error: {e}")
-
         # ── 3-Tab layout ──────────────────────────────────────────────
         tab_faq, tab_generic, tab_wa = st.tabs([
             f"📋  FAQ  ({len(faq_curated)})",
@@ -2900,6 +2842,62 @@ def render_faq():
                 wa_faqs, "wa",
                 no_content_msg="No WhatsApp Q&As yet — upload a chat export in Settings",
             )
+
+    # ── Action bar (bottom) ───────────────────────────────────────
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    ab1, ab2 = st.columns([3, 2])
+    with ab1:
+        gen_btn = st.button(
+            "✨ Generate Answers" if not faqs else "🔄 Regenerate Answers",
+            type="primary", use_container_width=True, disabled=(total == 0),
+        )
+    with ab2:
+        if faqs and st.button("🗑️ Clear All", use_container_width=True):
+            st.session_state.kb_faqs = []
+            save_kb(); st.rerun()
+    if total == 0:
+        st.info("Add documents or links from Settings first, then click Generate.")
+
+    if gen_btn:
+        prog_ph   = st.empty()
+        status_ph = st.empty()
+        docs_n  = len(st.session_state.get("kb_documents", []))
+        links_n = len(st.session_state.get("kb_links", [])) + len(st.session_state.get("kb_crawled", []))
+        wa_n    = len(st.session_state.get("kb_whatsapp", []))
+        passes  = sum(1 for x in [docs_n, links_n, wa_n] if x > 0)
+        status_ph.markdown(
+            f"<span style='color:#A78BFA;font-size:0.85rem'>"
+            f"🤖 Running {passes} extraction pass(es) across all sources — "
+            f"building your Answer Studio…</span>",
+            unsafe_allow_html=True,
+        )
+        prog_ph.progress(0.05)
+
+        def _progress(pct, label):
+            prog_ph.progress(pct)
+            status_ph.markdown(
+                f"<span style='color:#A78BFA;font-size:0.85rem'>{label}</span>",
+                unsafe_allow_html=True,
+            )
+
+        try:
+            new_faqs = generate_faqs(progress_cb=_progress)
+            prog_ph.progress(1.0)
+            if new_faqs:
+                st.session_state.kb_faqs = new_faqs
+                save_kb()
+                prog_ph.empty()
+                n_cats = len(set(f["category"] for f in new_faqs))
+                status_ph.success(
+                    f"✅ {len(new_faqs)} answers generated across {n_cats} categories — saved to Answer Studio!"
+                )
+                st.rerun()
+            else:
+                prog_ph.empty()
+                status_ph.warning("No answers extracted. Try adding more content.")
+        except Exception as e:
+            prog_ph.empty()
+            status_ph.error(f"Error: {e}")
 
     # ── Floating chat widget (always rendered, positioned via JS) ──
     _render_chat_float()
