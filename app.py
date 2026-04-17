@@ -2860,8 +2860,10 @@ def _render_client_engine_settings():
     st.markdown("""
     <div style='background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);
     border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:0.83rem;color:#A5B4FC'>
-    🎯 <b>Client Engine</b> — Upload per-client WhatsApp support chat exports (.txt or .zip).
-    The AI extracts clean Q&A pairs specific to each client's support conversations.
+    🎯 <b>Client Engine</b> — Upload any client support files per client name.
+    Supported: <b>WhatsApp exports</b> (.txt, .zip) · <b>Documents</b> (PDF, DOCX, XLSX, PPTX, HTML, CSV, JSON) ·
+    <b>Rich text</b> (RTF, EPUB, EML) · <b>Code / notebooks</b> (.py, .ipynb, .md) · Images · Audio.
+    The AI extracts clean, client-specific Q&A pairs from every file format.
     </div>
     """, unsafe_allow_html=True)
 
@@ -2874,53 +2876,118 @@ def _render_client_engine_settings():
         )
     with col_u:
         st.markdown("<div style='height:1px'></div>", unsafe_allow_html=True)
-        cqe_file = st.file_uploader(
-            "Upload chat (.txt or .zip)", type=["txt", "zip"],
+        cqe_files = st.file_uploader(
+            "Upload files",
+            type=[
+                "txt", "zip",
+                "pdf", "docx", "doc",
+                "xlsx", "xls", "csv",
+                "pptx", "ppt",
+                "html", "htm",
+                "json",
+                "png", "jpg", "jpeg", "webp", "gif",
+                "mp4", "mp3", "ogg", "opus", "aac", "wav",
+                "rtf", "epub", "eml", "ipynb",
+                "py", "js", "ts", "md",
+            ],
             key="cqe_uploader", label_visibility="visible",
-            accept_multiple_files=False,
+            accept_multiple_files=True,
         )
 
-    if cqe_file and client_name_input.strip():
+    if cqe_files and client_name_input.strip():
         client_key = client_name_input.strip()
         chats = st.session_state.get("kb_client_chats", [])
         existing_names = {c["file_name"] for c in chats if c["client"] == client_key}
 
-        if cqe_file.name in existing_names:
-            st.info(f"'{cqe_file.name}' already uploaded for {client_key}.")
-        else:
-            if st.button("➕ Add Chat", key="cqe_add_btn", type="primary"):
-                if cqe_file.name.lower().endswith(".zip"):
+        new_files = [f for f in cqe_files if f.name not in existing_names]
+        already   = [f.name for f in cqe_files if f.name in existing_names]
+        if already:
+            st.info(f"Already uploaded: {', '.join(already)}")
+
+        if new_files and st.button("➕ Add Files", key="cqe_add_btn", type="primary"):
+            added, skipped = 0, []
+            for cqe_file in new_files:
+                fname = cqe_file.name.lower()
+                content = ""
+                meta = {"valid": True, "total": 0, "participants": [],
+                        "msg_counts": {}, "first_date": "", "last_date": "",
+                        "date_range": "", "file_type": "document"}
+
+                # ── WhatsApp zip ──────────────────────────────────
+                if fname.endswith(".zip"):
                     try:
                         with zipfile.ZipFile(io.BytesIO(cqe_file.read())) as zf:
                             txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
-                            if not txt_files:
-                                st.error("No .txt file found inside the zip.")
-                                st.stop()
-                            raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
+                            if txt_files:
+                                raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
+                                content = parse_wa(raw)
+                                meta = parse_wa_meta(content)
+                                meta["file_type"] = "whatsapp"
+                            else:
+                                # zip with no .txt — try extracting any parseable file
+                                for zname in zf.namelist():
+                                    if any(zname.lower().endswith(e) for e in
+                                           [".pdf",".docx",".html",".csv",".json",".txt"]):
+                                        inner = io.BytesIO(zf.read(zname))
+                                        inner.name = zname
+                                        try:
+                                            content = parse_file(inner)
+                                            meta["file_type"] = "document"
+                                            break
+                                        except Exception:
+                                            pass
+                                if not content:
+                                    skipped.append(cqe_file.name)
+                                    continue
                     except Exception as e:
-                        st.error(f"Could not read zip: {e}")
-                        st.stop()
-                else:
+                        skipped.append(f"{cqe_file.name} ({e})")
+                        continue
+
+                # ── Plain txt — try WhatsApp parse first ─────────
+                elif fname.endswith(".txt"):
                     raw = cqe_file.read().decode("utf-8", "ignore")
+                    content = parse_wa(raw)
+                    meta = parse_wa_meta(content)
+                    if meta["valid"] and meta["total"] >= 5:
+                        meta["file_type"] = "whatsapp"
+                    else:
+                        # Not a WA export — treat as plain text document
+                        content = raw
+                        meta = {"valid": True, "total": 0, "participants": [],
+                                "msg_counts": {}, "first_date": "", "last_date": "",
+                                "date_range": "", "file_type": "document"}
 
-                parsed = parse_wa(raw)
-                meta   = parse_wa_meta(parsed)
-
-                if not meta["valid"] or meta["total"] < 5:
-                    st.warning("Doesn't look like a valid WhatsApp export (too few messages).")
+                # ── All other formats — use parse_file ───────────
                 else:
-                    st.session_state.kb_client_chats.append({
-                        "client":    client_key,
-                        "file_name": cqe_file.name,
-                        "content":   parsed,
-                        "added_at":  datetime.now().isoformat(),
-                        "size":      len(parsed),
-                        "meta":      meta,
-                    })
-                    save_kb()
-                    st.success(f"✅ Added '{cqe_file.name}' for {client_key} — {meta['total']:,} messages.")
-                    st.rerun()
-    elif cqe_file and not client_name_input.strip():
+                    try:
+                        content = parse_file(cqe_file)
+                        meta["file_type"] = "document"
+                    except Exception as e:
+                        skipped.append(f"{cqe_file.name} ({e})")
+                        continue
+
+                if not content or len(content.strip()) < 20:
+                    skipped.append(f"{cqe_file.name} (no text extracted)")
+                    continue
+
+                st.session_state.kb_client_chats.append({
+                    "client":    client_key,
+                    "file_name": cqe_file.name,
+                    "content":   content,
+                    "added_at":  datetime.now().isoformat(),
+                    "size":      len(content),
+                    "meta":      meta,
+                })
+                added += 1
+
+            if added:
+                save_kb()
+                st.success(f"✅ {added} file(s) added for {client_key}.")
+                st.rerun()
+            if skipped:
+                st.warning(f"⚠️ Skipped: {', '.join(skipped)}")
+
+    elif cqe_files and not client_name_input.strip():
         st.caption("Enter a client name above before uploading.")
 
     # ── List uploaded client chats ────────────────────────────────
@@ -3013,24 +3080,42 @@ def _generate_client_qas(client_name: str, chats: list[dict], progress_cb=None) 
                 f"🤖 Extracting Q&As from {chat['file_name']} ({ci+1}/{total})…",
             )
 
+        file_type = meta.get("file_type", "document")
+        if file_type == "whatsapp":
+            source_desc = (
+                f"WhatsApp customer support chat for client: {client_name}\n"
+                f"Participants: {plist}\n"
+                f"Date range: {drange} | Messages: {total_m}\n\n"
+                "TASK: Extract CLEAN, ACTIONABLE support Q&A pairs.\n\n"
+                "RULES:\n"
+                "• Focus ONLY on customer questions + agent/support answers.\n"
+                "• Rephrase the question in clean, general English (remove names, dates, chat noise).\n"
+                "• Answer should be concise (2–4 sentences), accurate, and support-friendly.\n"
+                "• SKIP: greetings, acknowledgements ('ok', 'noted', 'sure'), scheduling, media omitted, jokes.\n"
+                "• SKIP internal team discussions — only customer-facing Q&As.\n"
+            )
+        else:
+            source_desc = (
+                f"Support document / transcript for client: {client_name}\n"
+                f"File: {chat['file_name']}\n\n"
+                "TASK: Extract CLEAN, ACTIONABLE support Q&A pairs from this document.\n\n"
+                "RULES:\n"
+                "• Turn every fact, process, policy, or topic into a clear Question + Answer.\n"
+                "• Rephrase in natural support English — questions a customer would actually ask.\n"
+                "• Answer should be concise (2–4 sentences), accurate, and support-friendly.\n"
+                "• Cover every topic in the document — be exhaustive.\n"
+            )
+
         prompt = (
-            f"You are a support knowledge engineer. Analyze this WhatsApp customer support chat for client: {client_name}.\n"
-            f"Participants: {plist}\n"
-            f"Date range: {drange} | Messages: {total_m}\n\n"
-            "TASK: Extract CLEAN, ACTIONABLE support Q&A pairs.\n\n"
-            "RULES:\n"
-            "• Focus ONLY on customer questions + agent/support answers.\n"
-            "• Rephrase the question in clean, general English (remove names, dates, chat noise).\n"
-            "• Answer should be concise (2–4 sentences), accurate, and support-friendly.\n"
-            "• SKIP: greetings, acknowledgements ('ok', 'noted', 'sure'), scheduling messages, media omitted, jokes.\n"
-            "• SKIP internal team discussions — only include customer-facing Q&As.\n"
-            "• Deduplicate: if same question appears multiple times, keep only the best answer.\n"
+            f"You are a support knowledge engineer. Analyze this {'' if file_type == 'whatsapp' else 'document for '}client: {client_name}.\n"
+            + source_desc
+            + "• Deduplicate: if same question appears multiple times, keep only the best answer.\n"
             f"• Assign ONE category per Q&A from: {', '.join(_CQA_CATS)}.\n\n"
             "Return ONLY raw JSON array:\n"
             '[\n  {"category": "Technical Support", "question": "How do I reset my password?", '
             '"answer": "Click Forgot Password on the login screen..."},\n  ...\n]\n\n'
             "Be comprehensive — extract every genuine support Q&A pair.\n\n"
-            "CHAT:\n" + content[:MAX_CTX]
+            f"{'CHAT' if file_type == 'whatsapp' else 'DOCUMENT'}:\n" + content[:MAX_CTX]
         )
 
         try:
