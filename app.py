@@ -1043,8 +1043,22 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button,
 div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn"]) .stButton > button,
 div[data-testid="stHorizontalBlock"]:has(button[key="chat_nav_btn"]) .stButton > button,
-div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn_faq"]) .stButton > button {
+div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn_faq"]) .stButton > button,
+div[data-testid="stHorizontalBlock"]:has(button[key="back_btn"]) .stButton > button {
     border-radius: 20px !important;
+    background: rgba(29,78,216,0.18) !important;
+    border: 1px solid rgba(59,130,246,0.55) !important;
+    color: #93C5FD !important;
+    font-weight: 600 !important;
+}
+div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button:hover,
+div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn"]) .stButton > button:hover,
+div[data-testid="stHorizontalBlock"]:has(button[key="chat_nav_btn"]) .stButton > button:hover,
+div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn_faq"]) .stButton > button:hover,
+div[data-testid="stHorizontalBlock"]:has(button[key="back_btn"]) .stButton > button:hover {
+    background: rgba(29,78,216,0.40) !important;
+    border-color: #3B82F6 !important;
+    color: #fff !important;
 }
 
 @keyframes fab-pulse {
