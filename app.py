@@ -988,7 +988,7 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 .cf-sub   { font-size:0.68rem; color:#6B7280; margin-top:1px; }
 .cf-msgs {
     padding:14px 16px 8px;
-    height:calc(100dvh - 220px); min-height:80px;
+    height:calc(100dvh - 290px); min-height:80px;
     overflow-y:auto; display:flex; flex-direction:column; gap:12px;
     scroll-behavior:smooth;
 }
@@ -1542,16 +1542,36 @@ def build_context():
 
 
 def build_chat_context() -> tuple[str, list[str]]:
-    """Compact FAQ-based context for chat — much faster than raw pages."""
+    """Build rich context for chat — FAQs + Real Life Q&A + Client Q&A + docs."""
     parts, names = [], []
+
+    # Main Q&A store (includes WhatsApp, Client Learnings, generic)
     faqs = st.session_state.get("kb_faqs", [])
     if faqs:
         qa_lines = [f"Q: {f['question']}\nA: {f['answer']}" for f in faqs]
-        parts.append("=== KNOWLEDGE BASE ===\n" + "\n\n".join(qa_lines))
+        parts.append("=== Q&A KNOWLEDGE BASE ===\n" + "\n\n".join(qa_lines))
         names.append(f"{len(faqs)} Q&A pairs")
+
+    # Real Life Q&A (Convin Sense-specific from uploaded files)
+    rlqa = st.session_state.get("kb_rlqa_qas", [])
+    if rlqa:
+        rl_lines = [f"Q: {f['question']}\nA: {f['answer']}" for f in rlqa]
+        parts.append("=== REAL LIFE Q&A ===\n" + "\n\n".join(rl_lines))
+        names.append(f"{len(rlqa)} real-life Q&As")
+
+    # Per-client Q&A (aggregate all clients)
+    client_qas = st.session_state.get("kb_client_qas", {})
+    all_cqas = [qa for qas in client_qas.values() for qa in qas]
+    if all_cqas:
+        cq_lines = [f"Q: {f['question']}\nA: {f['answer']}" for f in all_cqas]
+        parts.append("=== CLIENT-SPECIFIC Q&A ===\n" + "\n\n".join(cq_lines))
+        names.append(f"{len(all_cqas)} client Q&As")
+
+    # Documents (truncated for speed)
     for d in st.session_state.get("kb_documents", []):
-        parts.append(f"=== DOCUMENT: {d['name']} ===\n{d['content'][:6000]}")
+        parts.append(f"=== DOCUMENT: {d['name']} ===\n{d['content'][:8000]}")
         names.append(d["name"])
+
     ctx = "\n\n".join(parts)
     return ctx[:180_000], names
 
@@ -1629,12 +1649,13 @@ def ask_claude_stream(query: str, placeholder) -> tuple[str, list[str]]:
         return msg, []
 
     SYSTEM = (
-        "You are Animesh, a professional support AI for Convin Sense.\n"
-        "• Answer ONLY from the knowledge base — never fabricate facts.\n"
-        "• Be concise and direct. Use **bold** for key terms and product names.\n"
-        "• If the answer is not in the knowledge base respond with: "
-        "\"This might need further verification — let me connect you with the right person from our team.\"\n"
-        "• For WhatsApp citations use: > 💬 [Name] on [Date]\n"
+        "You are an expert AI assistant for Convin Sense (AI voice bot platform).\n"
+        "• Answer from the knowledge base provided. If data is present, give a full answer.\n"
+        "• Be concise and direct. Use **bold** for key terms, metrics, and product names.\n"
+        "• Include specific numbers, percentages, and examples when available in the KB.\n"
+        "• If the topic is genuinely not in the knowledge base say: "
+        "\"I don't have specific data on that — please check with the team.\"\n"
+        "• Never say the knowledge base is empty if Q&A pairs are present.\n"
     )
     system = [
         {"type": "text", "text": SYSTEM},
@@ -4502,6 +4523,15 @@ def _render_chat_float():
     box-shadow:0 0 0 3px rgba(99,102,241,.12)!important;
 }
 .st-key-cf_panel_wrap .stTextInput>div>div>input::placeholder{color:#4B5563!important;}
+/* Form wrapper — remove default form styling */
+.st-key-cf_panel_wrap [data-testid="stForm"]{
+    border:none!important;background:transparent!important;
+    padding:0!important;border-radius:0!important;
+}
+.st-key-cf_panel_wrap [data-testid="stForm"]>div{
+    border-top:1px solid rgba(99,102,241,.1)!important;
+    padding:10px 14px 12px!important;
+}
 /* Clear button */
 .st-key-cf_panel_wrap .cf-clear-btn .stButton>button{
     height:30px!important;font-size:.72rem!important;border-radius:8px!important;
@@ -4622,37 +4652,41 @@ background:linear-gradient(180deg,rgba(99,102,241,.07) 0%,transparent 100%)">
 
         stream_ph = st.empty()
 
-        # Input row
-        st.markdown('<div style="border-top:1px solid rgba(99,102,241,.1);'
-                    'padding:10px 14px 12px;flex-shrink:0">', unsafe_allow_html=True)
-        in_col, send_col = st.columns([5, 1])
-        with in_col:
-            pre = st.session_state.get("quick_q", "")
-            user_input = st.text_input(
-                "cf_msg", placeholder="Ask a question…",
-                label_visibility="collapsed", key="cf_text_input",
-                value=pre,
-            )
-            if pre:
-                st.session_state.quick_q = ""
-        with send_col:
-            send_btn = st.button("↵", key="cf_send", type="primary")
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Pre-fill from quick_q
+        if st.session_state.get("quick_q"):
+            st.session_state["cf_text_input"] = st.session_state.quick_q
+            st.session_state.quick_q = ""
 
-        active = user_input.strip() if user_input else ""
-        if (send_btn or active) and active and active != st.session_state.get("_mini_last", ""):
-            st.session_state["_mini_last"] = active
-            ts = datetime.now().strftime("%H:%M")
-            st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts})
-            answer, sources = ask_claude_stream(active, stream_ph)
-            st.session_state.chat_history.append({"role": "assistant", "content": answer, "ts": ts, "sources": sources})
-            st.rerun()
+        # Input form — clear_on_submit clears the field after send
+        with st.form("cf_chat_form", clear_on_submit=True, border=False):
+            in_col, send_col = st.columns([5, 1])
+            with in_col:
+                user_input = st.text_input(
+                    "cf_msg", placeholder="Ask a question…",
+                    label_visibility="collapsed", key="cf_text_input",
+                )
+            with send_col:
+                send_btn = st.form_submit_button("↵")
+
+        if send_btn:
+            active = (user_input or "").strip()
+            if active:
+                ts = datetime.now().strftime("%H:%M")
+                st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts})
+                with stream_ph.container():
+                    st.markdown(
+                        '<div class="cf-ai-bubble" style="opacity:.6;font-style:italic">'
+                        'Thinking…</div>', unsafe_allow_html=True
+                    )
+                answer, sources = ask_claude_stream(active, stream_ph)
+                st.session_state.chat_history.append({"role": "assistant", "content": answer,
+                                                      "ts": ts, "sources": sources})
+                st.rerun()
 
         if history:
             st.markdown('<div class="cf-clear-btn" style="padding:0 14px 10px">', unsafe_allow_html=True)
             if st.button("🗑 Clear chat", key="cf_clear", type="secondary", use_container_width=True):
                 st.session_state.chat_history = []
-                st.session_state["_mini_last"] = ""
                 st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
