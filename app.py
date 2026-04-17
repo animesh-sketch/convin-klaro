@@ -2101,6 +2101,75 @@ def ts_label(iso):
     try: return datetime.fromisoformat(iso).strftime("%d %b %H:%M")
     except: return ""
 
+def _merge_similar_categories(faqs: list[dict], min_count: int = 5) -> list[dict]:
+    """Use Claude to merge similar category names, then keep only cats with >= min_count Q&As."""
+    if not faqs:
+        return faqs
+
+    cat_counts: dict[str, int] = {}
+    for f in faqs:
+        c = f.get("category", "Other")
+        cat_counts[c] = cat_counts.get(c, 0) + 1
+
+    cats_str = "\n".join(f"  {count:4d}  {cat}" for cat, count in sorted(cat_counts.items()))
+
+    prompt = (
+        "You are cleaning up a Q&A knowledge base category list for Convin Sense (AI voice bot).\n\n"
+        "TASK: Merge similar or duplicate categories into canonical names.\n\n"
+        "RULES:\n"
+        "• Merge categories that are semantically identical, near-duplicate, or sub-topics of the same theme.\n"
+        "• Use short, clear canonical names (2–5 words, Title Case).\n"
+        "• Keep categories that are genuinely distinct topics separate.\n"
+        "• Map EVERY listed category — even if it stays the same.\n\n"
+        f"CATEGORIES (count  name):\n{cats_str}\n\n"
+        "Return ONLY a raw JSON object — no markdown, no explanation:\n"
+        '{"Original Category Name": "Canonical Category Name", ...}'
+    )
+
+    mapping: dict[str, str] = {}
+    try:
+        r = get_client().messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
+        raw = re.sub(r"\n?```$", "", raw)
+        mapping = json.loads(raw)
+    except Exception:
+        pass
+
+    # Apply mapping
+    updated = []
+    for f in faqs:
+        nf = dict(f)
+        nf["category"] = mapping.get(f.get("category", "Other"), f.get("category", "Other"))
+        updated.append(nf)
+
+    # Count after merge
+    new_counts: dict[str, int] = {}
+    for f in updated:
+        c = f.get("category", "Other")
+        new_counts[c] = new_counts.get(c, 0) + 1
+
+    # Keep only categories with >= min_count; move small ones to "General"
+    final = []
+    for f in updated:
+        if new_counts.get(f.get("category", "Other"), 0) >= min_count:
+            final.append(f)
+        else:
+            nf = dict(f)
+            nf["category"] = "General"
+            final.append(nf)
+
+    # Drop "General" if it's also too small
+    gen_count = sum(1 for f in final if f.get("category") == "General")
+    if gen_count < min_count:
+        final = [f for f in final if f.get("category") != "General"]
+
+    return final
+
+
 def render_settings():
     render_topnav(show_settings_btn=False, show_back_btn=True)
 
@@ -2462,6 +2531,34 @@ def render_settings():
                 )
         else:
             st.caption("Generate answers first to enable exports.")
+
+        st.markdown("---")
+        st.markdown("**Q&A Category Cleanup**")
+        st.caption("Merge similar categories and drop any with fewer than 5 Q&As.")
+        _generic_preview = [f for f in st.session_state.get("kb_faqs", [])
+                            if not f.get("category", "").startswith("WhatsApp:")
+                            and not f.get("category", "").startswith("Client Learnings:")]
+        _cat_counts: dict[str, int] = {}
+        for _f in _generic_preview:
+            _c = _f.get("category", "Other")
+            _cat_counts[_c] = _cat_counts.get(_c, 0) + 1
+        st.caption(f"Current: {len(_cat_counts)} categories across {len(_generic_preview)} Q&As")
+
+        if st.button("🧹 Merge & Clean Categories", key="merge_cats_btn",
+                     type="primary", disabled=not _generic_preview):
+            with st.spinner("Analysing categories with Claude…"):
+                _merged = _merge_similar_categories(_generic_preview, min_count=5)
+            _other_faqs = [f for f in st.session_state.get("kb_faqs", [])
+                           if f.get("category", "").startswith("WhatsApp:")
+                           or f.get("category", "").startswith("Client Learnings:")]
+            st.session_state.kb_faqs = _other_faqs + _merged
+            save_kb()
+            _new_counts: dict[str, int] = {}
+            for _f in _merged:
+                _c = _f.get("category", "Other")
+                _new_counts[_c] = _new_counts.get(_c, 0) + 1
+            st.success(f"✅ Done — {len(_new_counts)} categories, {len(_merged)} Q&As kept.")
+            st.rerun()
 
         st.markdown("---")
         st.markdown("**Danger zone**")
