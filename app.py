@@ -5,8 +5,7 @@ AI-powered knowledge & support intelligence platform
 
 import streamlit as st
 import streamlit.components.v1 as _components
-import json, re, os, base64, zipfile, io, uuid, time, random, smtplib
-from email.mime.text import MIMEText
+import json, re, os, base64, zipfile, io, uuid, time
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import anthropic
@@ -1162,10 +1161,6 @@ _DEFAULTS = {
     "page":               "faq",
     "logged_in":          False,
     "login_user":         "",
-    "otp_code":           "",
-    "otp_email":          "",
-    "otp_expiry":         0.0,
-    "otp_step":           "email",
     "chat_open":          False,
     "chat_minimized":     False,
     "chat_history":       [],
@@ -1933,39 +1928,11 @@ def generate_faqs(progress_cb=None) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════
 #  SHARED TOP NAV
 # ══════════════════════════════════════════════════════════════════
-#  OTP LOGIN
+#  LOGIN
 # ══════════════════════════════════════════════════════════════════
 
-def _send_otp(to_email: str, otp: str) -> bool:
-    """Send OTP via SMTP. Returns True on success."""
-    try:
-        host = st.secrets.get("SMTP_HOST", "smtp.gmail.com")
-        port = int(st.secrets.get("SMTP_PORT", 587))
-        user = st.secrets.get("SMTP_USER", "")
-        pwd  = st.secrets.get("SMTP_PASS", "")
-        if not (user and pwd):
-            return False
-        msg = MIMEText(
-            f"Hi,\n\nYour Convin Klaro login code is:\n\n"
-            f"  {otp}\n\n"
-            f"This code expires in 10 minutes. Do not share it.\n\n"
-            f"— Convin Klaro",
-            "plain",
-        )
-        msg["Subject"] = f"Your Convin Klaro OTP: {otp}"
-        msg["From"]    = user
-        msg["To"]      = to_email
-        with smtplib.SMTP(host, port) as s:
-            s.ehlo(); s.starttls(); s.ehlo()
-            s.login(user, pwd)
-            s.sendmail(user, [to_email], msg.as_string())
-        return True
-    except Exception:
-        return False
-
-
 def render_login():
-    """Two-step OTP login page."""
+    """Username + password login page."""
     st.markdown("""
 <style>
 body,.stApp{background:#080B18!important;}
@@ -1990,7 +1957,6 @@ body,.stApp{background:#080B18!important;}
 .login-sub{font-size:.8rem;color:#6B7280;text-align:center;margin-bottom:28px;}
 .login-label{font-size:.75rem;color:#9CA3AF;font-weight:500;margin-bottom:6px;
     letter-spacing:.3px;text-transform:uppercase;}
-.login-divider{border:none;border-top:1px solid rgba(99,102,241,.12);margin:20px 0;}
 </style>
 <div class="login-wrap">
   <div class="login-card">
@@ -2003,58 +1969,23 @@ body,.stApp{background:#080B18!important;}
 
     _, col, _ = st.columns([1, 2, 1])
     with col:
-        step = st.session_state.get("otp_step", "email")
-
-        if step == "email":
-            st.markdown('<div class="login-label">Work email</div>', unsafe_allow_html=True)
-            email = st.text_input("email", placeholder="you@convin.ai",
-                                  label_visibility="collapsed", key="login_email_input")
-            if st.button("Send OTP →", type="primary", use_container_width=True):
-                email = (email or "").strip().lower()
-                allowed = list(st.secrets.get("ALLOWED_EMAILS", ["animesh@convin.ai"]))
-                if email not in [e.lower() for e in allowed]:
-                    st.error("This email is not authorised to access Convin Klaro.")
-                else:
-                    otp = str(random.randint(100000, 999999))
-                    ok  = _send_otp(email, otp)
-                    if ok:
-                        st.session_state.otp_code   = otp
-                        st.session_state.otp_email  = email
-                        st.session_state.otp_expiry = time.time() + 600
-                        st.session_state.otp_step   = "verify"
-                        st.rerun()
-                    else:
-                        st.warning("⚠️ Could not send email — SMTP not configured yet. "
-                                   "Add SMTP_PASS to secrets.toml.")
-
-        elif step == "verify":
-            sent_to = st.session_state.get("otp_email", "")
-            st.success(f"OTP sent to **{sent_to}** — check your inbox.")
-            st.markdown('<div class="login-label" style="margin-top:16px">Enter 6-digit code</div>',
-                        unsafe_allow_html=True)
-            entered = st.text_input("otp", placeholder="_ _ _ _ _ _",
-                                    max_chars=6, label_visibility="collapsed",
-                                    key="login_otp_input")
-            vc1, vc2 = st.columns([3, 1])
-            with vc1:
-                verify_btn = st.button("Verify & Sign In", type="primary", use_container_width=True)
-            with vc2:
-                if st.button("← Back", use_container_width=True):
-                    st.session_state.otp_step = "email"
-                    st.rerun()
-            if verify_btn:
-                entered = (entered or "").strip()
-                if time.time() > st.session_state.get("otp_expiry", 0):
-                    st.error("OTP expired. Please request a new one.")
-                    st.session_state.otp_step = "email"
-                elif entered == st.session_state.get("otp_code", ""):
-                    st.session_state.logged_in  = True
-                    st.session_state.login_user = st.session_state.otp_email
-                    st.session_state.otp_code   = ""
-                    st.session_state.otp_step   = "email"
-                    st.rerun()
-                else:
-                    st.error("Incorrect code. Please try again.")
+        st.markdown('<div class="login-label">Username</div>', unsafe_allow_html=True)
+        username = st.text_input("username", placeholder="Enter username",
+                                 label_visibility="collapsed", key="login_username")
+        st.markdown('<div class="login-label" style="margin-top:12px">Password</div>',
+                    unsafe_allow_html=True)
+        password = st.text_input("password", placeholder="Enter password", type="password",
+                                 label_visibility="collapsed", key="login_password")
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+        if st.button("Sign In →", type="primary", use_container_width=True, key="login_submit"):
+            users = dict(st.secrets.get("users", {}))
+            uname = (username or "").strip()
+            if uname in users and users[uname] == password:
+                st.session_state.logged_in  = True
+                st.session_state.login_user = uname
+                st.rerun()
+            else:
+                st.error("Incorrect username or password.")
 
 
 # ══════════════════════════════════════════════════════════════════
