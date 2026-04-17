@@ -4709,9 +4709,6 @@ def render_faq():
         bucket = [f for f in faqs if f["category"] == cat]
         faq_curated.extend(bucket[:_FAQ_CAP_PER_CAT])
 
-    # Real Life Q&A (separate store)
-    rlqa_qas = st.session_state.get("kb_rlqa_qas", [])
-
     all_cats = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
     wa_cats  = list(dict.fromkeys(f["category"] for f in wa_faqs))
 
@@ -4736,7 +4733,6 @@ def render_faq():
             f'<div class="lp-stat lp-stat-v"><span class="n">{len(faq_curated)}</span><div class="l">Curated FAQ</div></div>'
             f'<div class="lp-stat lp-stat-p"><span class="n">{len(generic_faqs)}</span><div class="l">Q&amp;A Pairs</div></div>'
             f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_faqs)}</span><div class="l">Client Use Cases</div></div>'
-            f'<div class="lp-stat lp-stat-g"><span class="n">{len(rlqa_qas)}</span><div class="l">Real Life Q&amp;A</div></div>'
             f'<div class="lp-stat lp-stat-g"><span class="n">{total}</span><div class="l">KB Sources</div></div>'
             f'</div>'
             f'</div></div>',
@@ -4744,11 +4740,10 @@ def render_faq():
         )
 
         # ── 5-Tab layout ──────────────────────────────────────────────
-        tab_faq, tab_generic, tab_wa, tab_rlqa, tab_flow = st.tabs([
+        tab_faq, tab_generic, tab_wa, tab_flow = st.tabs([
             f"📋  FAQ  ({len(faq_curated)})",
             f"💡  Q&A  ({len(generic_faqs)})",
             f"📚  Client Use Cases  ({len(wa_faqs)})",
-            f"📂  Real Life Q&A  ({len(rlqa_qas)})",
             f"🗺️  Process Flow",
         ])
 
@@ -4773,11 +4768,7 @@ def render_faq():
                 no_content_msg="No Q&As yet — upload chats in Settings → Client Use Cases, then click Generate Generic Q&As",
             )
 
-        # ── Tab 4: Real Life Q&A ──────────────────────────────────────
-        with tab_rlqa:
-            _render_rlqa_tab()
-
-        # ── Tab 5: Process Flowchart ──────────────────────────────────
+        # ── Tab 4: Process Flowchart ──────────────────────────────────
         with tab_flow:
             _render_flowchart_tab()
 
