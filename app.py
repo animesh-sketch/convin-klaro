@@ -1945,6 +1945,11 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
                     st.session_state.page = "settings"
                     st.rerun()
         if show_chat_btn:
+            with c_faq:
+                if st.button("💬 Chat with AI", key="chat_topnav_btn", type="primary",
+                             use_container_width=True):
+                    st.session_state.chat_open = True
+                    st.rerun()
             with c_set:
                 if st.button("⚙ Settings", key="settings_btn_faq", type="secondary",
                              use_container_width=True):
@@ -4528,8 +4533,11 @@ def _render_chat_float():
 
     st.markdown("""<style>
 @keyframes fab-pulse {
-  0%,100%{box-shadow:0 4px 24px rgba(139,92,246,.6),0 0 0 0 rgba(139,92,246,.3);}
-  50%     {box-shadow:0 4px 32px rgba(139,92,246,.85),0 0 0 12px rgba(139,92,246,0);}
+  0%,100%{box-shadow:0 6px 32px rgba(139,92,246,.75),0 0 0 0 rgba(236,72,153,.4);}
+  50%     {box-shadow:0 8px 42px rgba(139,92,246,1),0 0 0 14px rgba(236,72,153,0);}
+}
+@keyframes fab-glow {
+  0%,100%{opacity:1;} 50%{opacity:.82;}
 }
 @keyframes cf-slide-in{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 @keyframes cf-min-up{from{transform:translateY(110%)}to{transform:translateY(0)}}
@@ -4537,24 +4545,25 @@ def _render_chat_float():
 
 /* ── FAB ── */
 .st-key-cf_fab_wrap{
-    position:fixed!important;bottom:28px!important;right:28px!important;
-    width:64px!important;z-index:999999!important;
+    position:fixed!important;bottom:28px!important;right:24px!important;
+    width:160px!important;z-index:999999!important;
     background:transparent!important;border:none!important;
     box-shadow:none!important;padding:0!important;
 }
 .st-key-cf_fab_wrap>div{padding:0!important;gap:0!important;}
 .st-key-cf_fab_wrap .stButton>button{
-    width:60px!important;height:60px!important;border-radius:50%!important;
-    font-size:1.5rem!important;padding:0!important;line-height:1!important;
-    background:linear-gradient(135deg,#8B5CF6 0%,#6366F1 55%,#EC4899 100%)!important;
+    width:160px!important;height:52px!important;border-radius:30px!important;
+    font-size:1rem!important;font-weight:700!important;letter-spacing:.4px!important;
+    padding:0 20px!important;line-height:1!important;
+    background:linear-gradient(135deg,#7C3AED 0%,#6366F1 40%,#EC4899 100%)!important;
     border:none!important;color:#fff!important;
-    box-shadow:0 4px 22px rgba(139,92,246,.65)!important;
-    animation:fab-pulse 3s ease-in-out infinite!important;
+    box-shadow:0 6px 28px rgba(139,92,246,.8),0 2px 8px rgba(236,72,153,.5)!important;
+    animation:fab-pulse 2.8s ease-in-out infinite!important;
     transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s!important;
 }
 .st-key-cf_fab_wrap .stButton>button:hover{
-    transform:scale(1.1)!important;
-    box-shadow:0 6px 30px rgba(139,92,246,.8)!important;
+    transform:scale(1.06) translateY(-2px)!important;
+    box-shadow:0 10px 40px rgba(139,92,246,1),0 4px 16px rgba(236,72,153,.7)!important;
 }
 
 /* ── Minimized bar ── */
@@ -4663,7 +4672,7 @@ def _render_chat_float():
     # ── State: FAB only ───────────────────────────────────────────
     if not chat_open:
         with st.container(key="cf_fab_wrap"):
-            if st.button("💬", key="cf_fab_open", help="Open AI chat"):
+            if st.button("💬  Ask AI", key="cf_fab_open"):
                 st.session_state.chat_open      = True
                 st.session_state.chat_minimized = False
                 st.session_state.quick_q        = ""
