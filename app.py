@@ -4,6 +4,7 @@ AI-powered knowledge & support intelligence platform
 """
 
 import streamlit as st
+import streamlit.components.v1 as _components
 import json, re, os, base64, zipfile, io
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -2565,6 +2566,277 @@ def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
                     st.rerun()
 
 
+_FLOWCHART_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  :root {
+    --bg:     #060914;
+    --s1:     #0D1117;
+    --s2:     #111827;
+    --s3:     #1A2035;
+    --accent: #6366F1;
+    --aclt:   #818CF8;
+    --cyan:   #22D3EE;
+    --green:  #10B981;
+    --amber:  #F59E0B;
+    --rose:   #F43F5E;
+    --t1:     #E5E7EB;
+    --t2:     #94A3B8;
+    --t3:     #475569;
+    --bdr:    rgba(255,255,255,0.06);
+    --bdra:   rgba(99,102,241,0.28);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--t1);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100%;
+  }
+  body {
+    background-image:
+      radial-gradient(ellipse 110% 55% at 50% -10%, rgba(139,92,246,0.18) 0%, transparent 55%),
+      radial-gradient(ellipse 70% 45% at 95% 90%, rgba(236,72,153,0.10) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 5% 75%, rgba(34,211,238,0.08) 0%, transparent 50%);
+    padding: 32px 24px 48px;
+  }
+
+  /* ── Header ── */
+  .hd {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .hd .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: 100px;
+    padding: 5px 16px;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--aclt);
+    margin-bottom: 14px;
+  }
+  .hd h1 {
+    font-size: 1.85rem; font-weight: 800; color: var(--t1);
+    line-height: 1.15;
+    background: linear-gradient(135deg, #E5E7EB 30%, #818CF8 70%, #22D3EE 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hd p {
+    margin-top: 10px; color: var(--t2); font-size: 14px;
+    max-width: 560px; margin-inline: auto; line-height: 1.6;
+  }
+
+  /* ── Diagram card ── */
+  .diagram-card {
+    background: var(--s2);
+    border: 1px solid var(--bdra);
+    border-radius: 20px;
+    padding: 32px 28px;
+    max-width: 1080px;
+    margin: 0 auto;
+    box-shadow:
+      0 0 0 1px rgba(99,102,241,0.08),
+      0 8px 40px rgba(0,0,0,0.5),
+      0 0 80px rgba(99,102,241,0.06) inset;
+    overflow-x: auto;
+  }
+  .mermaid { min-width: 720px; }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex; flex-wrap: wrap; gap: 10px;
+    justify-content: center;
+    max-width: 860px; margin: 24px auto 0;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(17,24,39,0.85);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 8px; padding: 7px 14px;
+    font-size: 12px; color: var(--t2);
+    backdrop-filter: blur(8px);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Metric cards ── */
+  .metrics {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    justify-content: center;
+    max-width: 860px; margin: 28px auto 0;
+  }
+  .mc {
+    background: rgba(17,24,39,0.9);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px; padding: 18px 22px;
+    text-align: center; flex: 1; min-width: 120px;
+    transition: border-color .2s, transform .2s;
+  }
+  .mc:hover { border-color: var(--bdra); transform: translateY(-2px); }
+  .mc .val { font-size: 1.45rem; font-weight: 800; color: var(--aclt); }
+  .mc .lbl { font-size: 11px; color: var(--t3); margin-top: 5px; line-height: 1.4; }
+
+  /* ── Footer ── */
+  .ft {
+    text-align: center; margin-top: 36px;
+    font-size: 11px; color: var(--t3); letter-spacing: .3px;
+  }
+  .ft span { color: var(--t2); }
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <div class="eyebrow">✦ Convin Sense &nbsp;·&nbsp; AI Voice Bot</div>
+  <h1>End-to-End Process Flow</h1>
+  <p>From lead ingestion through qualification, handoff, and conversion tracking — all decision points, channels, and NBA loops.</p>
+</div>
+
+<div class="diagram-card">
+<div class="mermaid">
+%%{init: {"theme": "base", "themeVariables": {
+  "primaryColor":"#1A2035",
+  "primaryTextColor":"#E5E7EB",
+  "primaryBorderColor":"#6366F1",
+  "lineColor":"#475569",
+  "secondaryColor":"#0D1117",
+  "tertiaryColor":"#111827",
+  "noteBkgColor":"#1A2035",
+  "noteTextColor":"#E5E7EB",
+  "edgeLabelBackground":"#111827",
+  "clusterBkg":"#111827",
+  "titleColor":"#E5E7EB",
+  "nodeBorder":"#6366F1",
+  "mainBkg":"#1A2035"
+}}}%%
+flowchart TD
+
+    %% ── PHASE 1: SETUP
+    A([🗂️ Lead CSV Upload\nfrom Client]) --> B[🔧 Normalize & Validate\nNames · Phone · Metadata]
+    B --> C[⚙️ Bot Configuration\nKB · Voice · System Prompt · DND Hours]
+    C --> D[📋 Pre-Campaign Checklist\nBaseline Metrics · Dedicated Agents · MSA]
+    D --> E{🧪 UAT Passed?\n100–200 test leads}
+    E -- ❌ Issues Found --> C
+    E -- ✅ Approved --> F
+
+    %% ── PHASE 2: CAMPAIGN LAUNCH
+    F([🚀 Campaign Launch\nWallet Charged · Go-Live])
+
+    F --> G[📞 AI Dialing Engine\nExotel · Concurrent Slots · 10AM–9PM]
+    F --> H[💬 WhatsApp Sequence\nParallel Track via WABA]
+
+    %% ── VOICE TRACK
+    G --> I{📡 Call Connected?}
+    I -- ❌ No Answer / DND --> J[📅 NBA: Reschedule\nDifferent time window]
+    J --> G
+
+    I -- ✅ Connected --> K[🤖 Bot Conversation Begins]
+    K --> K1[👋 Introduction\nPersona · Company · Purpose]
+    K1 --> K2[🔁 Multi-turn Q&A\nOne question at a time]
+    K2 --> K3[🎯 Qualification Scoring\nIntent · Budget · Timeline]
+
+    K3 --> L{📊 Lead Outcome}
+
+    L -- 🔥 HOT --> M[⚡ Immediate Handoff\nSame-day callback]
+    L -- 🌡️ WARM --> N[📤 Queue for Handoff\nCallback within 24 hrs]
+    L -- ❄️ COLD --> O[🔄 Continue NBA Loop]
+    L -- ⏱️ Call under 2 sec --> P[⚠️ Manual Audit]
+
+    %% ── WHATSAPP TRACK
+    H --> H1[📨 Message 1: Day 0\nTemplate — Utility / Marketing]
+    H1 --> H2{📬 Delivered?}
+    H2 -- ❌ Spam / Limit --> H_ERR[🚨 WABA Alert\nPause & Investigate]
+    H2 -- ✅ Delivered --> H3{💬 Response?}
+    H3 -- No --> H4[📨 Message 2: Day 2]
+    H4 --> H5[📨 Message 3: Day 4\n15–19% convert after 3rd msg]
+    H3 -- ✅ Replied --> K
+
+    %% ── NBA LOOP
+    O --> NBA{🔁 NBA Loop\nDays 1–7}
+    NBA -- More attempts --> G
+    NBA -- Days Exhausted --> U[❌ Mark Inactive]
+
+    %% ── HUMAN HANDOFF
+    M --> Q[👤 Human Agent\nClick-to-Call · Transcript Provided]
+    N --> Q
+    Q --> R{📞 Called within TAT?}
+    R -- ❌ TAT Breach --> S[📉 Lead Lost]
+    R -- ✅ Called --> T{🏆 Converted?}
+    T -- ✅ Yes --> CV[✅ Conversion Logged\nAttribution tracked]
+    T -- ❌ No --> FB[📝 Outcome Noted]
+
+    %% ── METRICS
+    CV --> V[📊 Campaign Metrics\nConnectivity · Qualification · Conversion]
+    FB --> V
+    S --> V
+    U --> V
+    P --> V
+
+    V --> W[📋 Audit Report\nShared with Client]
+    W --> X{📝 Contract Decision}
+    X -- 🎯 Go Live --> Y([🟢 Production\nFull Scale])
+    X -- 🔁 Optimize --> F
+
+    %% ── DAILY MONITORING
+    F -.->|Daily 2PM check| MON[🔍 Daily Monitoring\nCall volume · WABA quality · NBA]
+    MON -.-> F
+
+    %% ── STYLES
+    classDef phase fill:#1a1560,stroke:#6366F1,stroke-width:2px,color:#A5B4FC,font-weight:700
+    classDef decision fill:#1c1230,stroke:#8B5CF6,stroke-width:2px,color:#C4B5FD,font-weight:600
+    classDef action fill:#0f1729,stroke:#3B82F6,stroke-width:1.5px,color:#93C5FD
+    classDef success fill:#052e16,stroke:#10B981,stroke-width:2px,color:#6EE7B7,font-weight:700
+    classDef danger fill:#2d0c0c,stroke:#F43F5E,stroke-width:1.5px,color:#FCA5A5
+    classDef warn fill:#1c1407,stroke:#F59E0B,stroke-width:1.5px,color:#FCD34D
+    classDef monitor fill:#0f0a20,stroke:#A78BFA,stroke-width:1.5px,color:#C4B5FD,stroke-dasharray:5
+
+    class A,F,Y phase
+    class E,I,L,H2,H3,NBA,R,T,X decision
+    class B,C,D,G,H,H1,H4,H5,J,K,K1,K2,K3,M,N,O,P,Q action
+    class CV,V,W success
+    class H_ERR,S danger
+    class U,FB warn
+    class MON monitor
+</div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="dot" style="background:#6366F1"></div> Campaign Phase</div>
+  <div class="legend-item"><div class="dot" style="background:#8B5CF6"></div> Decision Point</div>
+  <div class="legend-item"><div class="dot" style="background:#3B82F6"></div> Process Action</div>
+  <div class="legend-item"><div class="dot" style="background:#10B981"></div> Success / Metric</div>
+  <div class="legend-item"><div class="dot" style="background:#F43F5E"></div> Error / Risk</div>
+  <div class="legend-item"><div class="dot" style="background:#A78BFA"></div> Monitoring Loop</div>
+</div>
+
+<div class="metrics">
+  <div class="mc"><div class="val">70–80%</div><div class="lbl">Connectivity<br>Rate Target</div></div>
+  <div class="mc"><div class="val">10–31%</div><div class="lbl">Qualification<br>Rate (Hot+Warm)</div></div>
+  <div class="mc"><div class="val">~20%</div><div class="lbl">Conversion Lift<br>vs Baseline</div></div>
+  <div class="mc"><div class="val">Day 0</div><div class="lbl">Max TAT for<br>Human Callback</div></div>
+  <div class="mc"><div class="val">3+</div><div class="lbl">WhatsApp Msgs<br>Before Drop</div></div>
+  <div class="mc"><div class="val">1–7 Days</div><div class="lbl">NBA Loop<br>Duration</div></div>
+</div>
+
+<div class="ft">Convin Sense &nbsp;·&nbsp; <span>AI Sales Activation Platform</span> &nbsp;·&nbsp; Built from KB, pilot chats &amp; product docs &nbsp;·&nbsp; 2026</div>
+
+<script>mermaid.initialize({startOnLoad:true, securityLevel:'loose', flowchart:{curve:'basis', padding:20}});</script>
+</body>
+</html>"""
+
+
+def _render_flowchart_tab():
+    """Render the classy dark-themed Convin Sense process flowchart."""
+    _components.html(_FLOWCHART_HTML, height=3400, scrolling=True)
+
+
 def _render_mini_chat():
     """Inline chat panel rendered as a side column on the FAQ page."""
     # ── Panel header
@@ -2822,11 +3094,12 @@ def render_faq():
             unsafe_allow_html=True,
         )
 
-        # ── 3-Tab layout ──────────────────────────────────────────────
-        tab_faq, tab_generic, tab_wa = st.tabs([
+        # ── 4-Tab layout ──────────────────────────────────────────────
+        tab_faq, tab_generic, tab_wa, tab_flow = st.tabs([
             f"📋  FAQ  ({len(faq_curated)})",
             f"💡  Q&A  ({len(generic_faqs)})",
             f"💬  WhatsApp  ({len(wa_faqs)})",
+            f"🗺️  Process Flow",
         ])
 
         # ── Tab 1: Curated Convin Sense FAQ ───────────────────────────
@@ -2849,6 +3122,10 @@ def render_faq():
                 wa_faqs, "wa",
                 no_content_msg="No WhatsApp Q&As yet — upload a chat export in Settings",
             )
+
+        # ── Tab 4: Process Flowchart ──────────────────────────────────
+        with tab_flow:
+            _render_flowchart_tab()
 
     # ── Action bar (bottom) ───────────────────────────────────────
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
