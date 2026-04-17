@@ -4828,11 +4828,11 @@ def render_faq():
         faq_curated.extend(bucket[:_FAQ_CAP_PER_CAT])
 
     SOURCE_BUCKETS = {
-        "All":        faqs,
         "FAQ":        faq_curated,
         "Q&A":        generic_faqs,
         "Use Cases":  wa_specific,
         "More Q&A":   wa_generic,
+        "All":        faqs,
     }
     SOURCE_COUNTS = {k: len(v) for k, v in SOURCE_BUCKETS.items()}
     all_cats_full = sorted(set(f["category"] for f in faqs))
