@@ -4237,129 +4237,201 @@ def _render_mini_chat():
 
 
 def _render_chat_float():
-    """Floating chat bubble — pure CSS :has() positioning, no JS needed."""
+    """Stable floating chat bubble.
+
+    Uses stVerticalBlockBorderWrapper:has(style#anchor) targeting — same technique
+    as streamlit-float. Wrapping in st.container() gives the anchor a scoped
+    stVerticalBlockBorderWrapper so the :not() selector reliably picks the innermost one.
+    """
     chat_open = st.session_state.get("chat_open", False)
 
+    # ── FAB (closed state) ────────────────────────────────────────
     if not chat_open:
-        # Inject CSS that fixes the innermost stVerticalBlock containing the marker
+        with st.container():
+            st.markdown("""
+<style>
+/* Fix the container whose stVerticalBlockBorderWrapper holds our style anchor */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a):not(
+    :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a))
+) {
+    position: fixed !important;
+    bottom: 32px !important;
+    right: 32px !important;
+    width: 66px !important;
+    z-index: 999999 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a):not(
+    :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a))
+) > div {
+    padding: 0 !important;
+    gap: 0 !important;
+}
+/* FAB button styling */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a) .stButton > button {
+    width: 62px !important;
+    height: 62px !important;
+    border-radius: 50% !important;
+    padding: 0 !important;
+    font-size: 1.5rem !important;
+    line-height: 1 !important;
+    background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #EC4899 100%) !important;
+    border: none !important;
+    color: #fff !important;
+    box-shadow: 0 4px 22px rgba(139,92,246,0.65), 0 0 0 0 rgba(139,92,246,0.35) !important;
+    animation: fab-pulse 2.8s ease-in-out infinite !important;
+    transition: transform 0.2s cubic-bezier(.34,1.56,.64,1) !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a) .stButton > button:hover {
+    transform: scale(1.12) !important;
+    box-shadow: 0 6px 32px rgba(139,92,246,0.8) !important;
+}
+</style>
+<style id="cf-fab-a"></style>
+""", unsafe_allow_html=True)
+            if st.button("💬", key="cf_fab_open", help="Chat with Animesh"):
+                st.session_state.chat_open = True
+                st.rerun()
+        return
+
+    # ── Chat panel (open state) ───────────────────────────────────
+    with st.container():
         st.markdown("""
 <style>
-div[data-testid="stVerticalBlock"]:has(> div > div > #cf-fab-mk),
-div[data-testid="stVerticalBlock"]:has(#cf-fab-mk):not(:has(div[data-testid="stVerticalBlock"]:has(#cf-fab-mk))) {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a):not(
+    :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a))
+) {
     position: fixed !important;
     bottom: 28px !important;
     right: 28px !important;
-    width: 64px !important;
-    z-index: 99999 !important;
-    margin: 0 !important;
+    width: 384px !important;
+    z-index: 999999 !important;
+    background: rgba(10,13,22,0.97) !important;
+    border: 1px solid rgba(99,102,241,0.28) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.75),
+                0 0 0 1px rgba(99,102,241,0.1) inset,
+                0 0 40px rgba(99,102,241,0.06) inset !important;
+    backdrop-filter: blur(24px) !important;
+    overflow: hidden !important;
+    max-height: 88vh !important;
+}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a):not(
+    :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a))
+) > div {
     padding: 0 !important;
-    background: transparent !important;
+    gap: 0 !important;
+}
+/* Panel close button */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a) .cf-close-btn button {
+    padding: 2px 10px !important;
+    font-size: 0.72rem !important;
+    border-radius: 8px !important;
+    min-height: 26px !important;
+    height: 26px !important;
+}
+/* Send button */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a) [data-testid="stColumns"] [data-testid="column"]:last-child button {
+    height: 38px !important;
+    padding: 0 !important;
+}
+/* Clear chat button */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a) .cf-clear-wrap button {
+    font-size: 0.72rem !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    border-radius: 8px !important;
 }
 </style>
-<div id="cf-fab-mk" style="display:none"></div>""", unsafe_allow_html=True)
-        if st.button("💬", key="cf_fab_open", help="Chat with Animesh"):
-            st.session_state.chat_open = True
-            st.rerun()
-        return
+<style id="cf-panel-a"></style>
+""", unsafe_allow_html=True)
 
-    # ── Full chat panel ───────────────────────────────────────────
-    st.markdown("""
-<style>
-div[data-testid="stVerticalBlock"]:has(#cf-panel-mk):not(:has(div[data-testid="stVerticalBlock"]:has(#cf-panel-mk))) {
-    position: fixed !important;
-    bottom: 90px !important;
-    right: 28px !important;
-    width: 370px !important;
-    z-index: 99999 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-</style>
-<div id="cf-panel-mk" style="display:none"></div>""", unsafe_allow_html=True)
-    st.markdown('<div class="cf-shell">', unsafe_allow_html=True)
+        # Panel header
+        st.markdown("""
+<div style="padding:15px 18px 11px;border-bottom:1px solid rgba(99,102,241,0.15);
+display:flex;align-items:center;justify-content:space-between;gap:10px">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="width:9px;height:9px;border-radius:50%;background:#10B981;
+    box-shadow:0 0 7px #10B981;animation:fab-pulse 2.5s ease-in-out infinite;flex-shrink:0"></div>
+    <div>
+      <div style="font-weight:700;font-size:0.88rem;color:#E5E7EB;line-height:1.2">AI Chat</div>
+      <div style="font-size:0.68rem;color:#4B5563;line-height:1.2">Animesh · Powered by Claude</div>
+    </div>
+  </div>
+  <div style="font-size:0.7rem;color:#374151">Ask anything about Convin Sense</div>
+</div>
+""", unsafe_allow_html=True)
 
-    # Header
-    st.markdown(
-        '<div class="cf-header">'
-        '<div class="cf-title-row">'
-        '<span class="cf-live-dot"></span>'
-        '<div><div class="cf-title">AI Chat</div>'
-        '<div class="cf-sub">Animesh · Powered by Claude</div></div>'
-        '</div>'
-        '</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Close button (right-aligned)
-    st.markdown('<div style="text-align:right;padding:6px 12px 0" class="cf-close-btn">', unsafe_allow_html=True)
-    if st.button("✕ Close", key="cf_close", type="secondary"):
-        st.session_state.chat_open = False
-        st.session_state.quick_q = ""
-        st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Messages
-    history = st.session_state.get("chat_history", [])
-    if history:
-        msgs = ""
-        for msg in history[-20:]:
-            c = msg["content"]
-            if msg["role"] == "user":
-                safe = c.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>")
-                msgs += f'<div class="cf-user-bubble">{safe}</div>'
-            else:
-                msgs += f'<div class="cf-ai-bubble">{c}</div>'
-        st.markdown(f'<div class="cf-msgs">{msgs}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(
-            '<div class="cf-msgs"><div class="cf-empty">'
-            '<span class="cf-empty-icon">✦</span>'
-            "Hi, I'm Animesh.<br>Ask me anything about Convin Sense."
-            '</div></div>',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown('</div>', unsafe_allow_html=True)  # close cf-shell
-
-    # ── Streaming placeholder ─────────────────────────────────────
-    stream_ph = st.empty()
-
-    # ── Input row ────────────────────────────────────────────────
-    st.markdown('<div class="cf-input-row">', unsafe_allow_html=True)
-    in_col, send_col = st.columns([5, 1])
-    with in_col:
-        pre = st.session_state.get("quick_q", "")
-        user_input = st.text_input(
-            "cf_msg", placeholder="Ask a question…",
-            label_visibility="collapsed", key="cf_text_input",
-            value=pre,
-        )
-        if pre:
+        # Close button
+        st.markdown('<div style="text-align:right;padding:6px 14px 2px" class="cf-close-btn">', unsafe_allow_html=True)
+        if st.button("✕ Close", key="cf_close", type="secondary"):
+            st.session_state.chat_open = False
             st.session_state.quick_q = ""
-    with send_col:
-        send_btn = st.button("↵", key="cf_send", type="primary")
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Handle send
-    active = user_input.strip() if user_input else ""
-    if (send_btn or active) and active and active != st.session_state.get("_mini_last", ""):
-        st.session_state["_mini_last"] = active
-        ts = datetime.now().strftime("%H:%M")
-        st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts})
-        answer, sources = ask_claude_stream(active, stream_ph)
-        st.session_state.chat_history.append({"role": "assistant", "content": answer, "ts": ts, "sources": sources})
-        st.rerun()
-
-    # Clear button
-    if history:
-        st.markdown('<div style="padding:0 12px 10px">', unsafe_allow_html=True)
-        if st.button("🗑 Clear chat", key="cf_clear", type="secondary", use_container_width=True):
-            st.session_state.chat_history = []
-            st.session_state["_mini_last"] = ""
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # JS: position this block fixed in bottom-right
+        # Message history
+        history = st.session_state.get("chat_history", [])
+        if history:
+            msgs_html = ""
+            for msg in history[-20:]:
+                c = msg["content"]
+                if msg["role"] == "user":
+                    safe = c.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>")
+                    msgs_html += f'<div class="cf-user-bubble">{safe}</div>'
+                else:
+                    msgs_html += f'<div class="cf-ai-bubble">{c}</div>'
+            st.markdown(f'<div class="cf-msgs">{msgs_html}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown("""
+<div class="cf-msgs">
+  <div class="cf-empty">
+    <span class="cf-empty-icon">✦</span>
+    Hi, I'm Animesh.<br>Ask me anything about Convin Sense.
+  </div>
+</div>""", unsafe_allow_html=True)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Streaming placeholder
+        stream_ph = st.empty()
+
+        # Input row
+        st.markdown('<div class="cf-input-row">', unsafe_allow_html=True)
+        in_col, send_col = st.columns([5, 1])
+        with in_col:
+            pre = st.session_state.get("quick_q", "")
+            user_input = st.text_input(
+                "cf_msg", placeholder="Ask a question…",
+                label_visibility="collapsed", key="cf_text_input",
+                value=pre,
+            )
+            if pre:
+                st.session_state.quick_q = ""
+        with send_col:
+            send_btn = st.button("↵", key="cf_send", type="primary")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # Handle send
+        active = user_input.strip() if user_input else ""
+        if (send_btn or active) and active and active != st.session_state.get("_mini_last", ""):
+            st.session_state["_mini_last"] = active
+            ts = datetime.now().strftime("%H:%M")
+            st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts})
+            answer, sources = ask_claude_stream(active, stream_ph)
+            st.session_state.chat_history.append({"role": "assistant", "content": answer, "ts": ts, "sources": sources})
+            st.rerun()
+
+        # Clear button
+        if history:
+            st.markdown('<div style="padding:4px 12px 10px" class="cf-clear-wrap">', unsafe_allow_html=True)
+            if st.button("🗑 Clear chat", key="cf_clear", type="secondary", use_container_width=True):
+                st.session_state.chat_history = []
+                st.session_state["_mini_last"] = ""
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_faq():
