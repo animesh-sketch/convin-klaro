@@ -5,7 +5,7 @@ AI-powered knowledge & support intelligence platform
 
 import streamlit as st
 import streamlit.components.v1 as _components
-import json, re, os, base64, zipfile, io
+import json, re, os, base64, zipfile, io, uuid
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import anthropic
@@ -28,7 +28,7 @@ _LOGO_URI = _b64_img(os.path.join(os.path.dirname(os.path.abspath(__file__)), "c
 # ══════════════════════════════════════════════════════════════════
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_FILE = os.path.join(APP_DIR, "kb_store.json")
-KB_KEYS = ("kb_documents", "kb_links", "kb_whatsapp", "kb_crawled", "kb_faqs")
+KB_KEYS = ("kb_documents", "kb_links", "kb_whatsapp", "kb_crawled", "kb_faqs", "kb_client_chats")
 MAX_CTX  = 580_000   # chars — safely under Claude's 200k-token window
 
 st.set_page_config(
@@ -1082,6 +1082,7 @@ def load_kb():
                 d = json.load(f)
             for k in KB_KEYS:
                 st.session_state[k] = d.get(k, [])
+            st.session_state["kb_client_qas"] = d.get("kb_client_qas", {})
             st.session_state["show_sources"] = d.get("show_sources", False)
         except Exception:
             pass
@@ -1089,6 +1090,7 @@ def load_kb():
 
 def save_kb():
     data = {k: st.session_state.get(k, []) for k in KB_KEYS}
+    data["kb_client_qas"] = st.session_state.get("kb_client_qas", {})
     data["show_sources"] = st.session_state.get("show_sources", False)
     with open(KB_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -1108,15 +1110,18 @@ def total_sources():
 #  SESSION STATE
 # ══════════════════════════════════════════════════════════════════
 _DEFAULTS = {
-    "page":          "faq",
-    "chat_open":     False,
-    "chat_history":  [],
-    "_last_input":   "",
-    "_mini_last":    "",
-    "quick_q":       "",
-    "show_sources":  False,
-    "_kb_loaded":    False,
-    "kb_faqs":       [],
+    "page":               "faq",
+    "chat_open":          False,
+    "chat_history":       [],
+    "_last_input":        "",
+    "_mini_last":         "",
+    "quick_q":            "",
+    "show_sources":       False,
+    "_kb_loaded":         False,
+    "kb_faqs":            [],
+    "kb_client_qas":      {},
+    "cqa_selected":       "",
+    "cqa_edit_id":        "",
     **{k: [] for k in KB_KEYS},
 }
 for k, v in _DEFAULTS.items():
@@ -1785,7 +1790,7 @@ def generate_faqs(progress_cb=None) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════
 #  SHARED TOP NAV
 # ══════════════════════════════════════════════════════════════════
-def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False):
+def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False, show_client_btn=False):
     docs, links, wa, pages = kb_stats()
     total = docs + links + wa + pages
     status_label = f"{total} sources loaded" if total else "No knowledge base"
@@ -1815,11 +1820,17 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
     # Streamlit buttons — functional nav row
     nav_spacer = st.container()
     with nav_spacer:
-        c_l, c_faq, c_set = st.columns([7, 1, 1])
+        c_l, c_cli, c_faq, c_set = st.columns([4.2, 1.3, 1.3, 1.3])
         if show_back_btn:
             with c_l:
                 if st.button("← Back to Answer Studio", key="back_btn", type="secondary"):
                     st.session_state.page = "faq"
+                    st.rerun()
+        if show_client_btn:
+            with c_cli:
+                if st.button("🎯 Client Engine", key="client_nav_btn", type="secondary",
+                             use_container_width=True):
+                    st.session_state.page = "client_qa"
                     st.rerun()
         if show_settings_btn:
             with c_faq:
@@ -2034,8 +2045,8 @@ def render_settings():
     st.markdown("---")
 
     # ── Tabs ────────────────────────────────────────────────────────
-    t1, t2, t3, t4, t5 = st.tabs([
-        "📄 Documents", "🌐 Web Links", "💬 WhatsApp", "🕷️ Crawl Site", "⚙️ Preferences"
+    t1, t2, t3, t4, t5, t6 = st.tabs([
+        "📄 Documents", "🌐 Web Links", "💬 WhatsApp", "🕷️ Crawl Site", "⚙️ Preferences", "🎯 Client Engine"
     ])
 
     # ── Documents ──────────────────────────────────────────────────
@@ -2332,6 +2343,10 @@ def render_settings():
             save_kb()
             st.success("Knowledge base cleared.")
             st.rerun()
+
+    # ── Client Engine ──────────────────────────────────────────────
+    with t6:
+        _render_client_engine_settings()
 
     st.markdown("</div></div>", unsafe_allow_html=True)
 
@@ -2837,6 +2852,604 @@ def _render_flowchart_tab():
     _components.html(_FLOWCHART_HTML, height=3400, scrolling=True)
 
 
+# ══════════════════════════════════════════════════════════════════
+#  CLIENT ENGINE — Settings upload UI
+# ══════════════════════════════════════════════════════════════════
+
+def _render_client_engine_settings():
+    st.markdown("""
+    <div style='background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);
+    border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:0.83rem;color:#A5B4FC'>
+    🎯 <b>Client Engine</b> — Upload per-client WhatsApp support chat exports (.txt or .zip).
+    The AI extracts clean Q&A pairs specific to each client's support conversations.
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Client name + file uploader ──────────────────────────────
+    col_n, col_u = st.columns([2, 3])
+    with col_n:
+        client_name_input = st.text_input(
+            "Client name", placeholder="e.g. HDFC Bank", key="cqe_client_name",
+            label_visibility="visible",
+        )
+    with col_u:
+        st.markdown("<div style='height:1px'></div>", unsafe_allow_html=True)
+        cqe_file = st.file_uploader(
+            "Upload chat (.txt or .zip)", type=["txt", "zip"],
+            key="cqe_uploader", label_visibility="visible",
+            accept_multiple_files=False,
+        )
+
+    if cqe_file and client_name_input.strip():
+        client_key = client_name_input.strip()
+        chats = st.session_state.get("kb_client_chats", [])
+        existing_names = {c["file_name"] for c in chats if c["client"] == client_key}
+
+        if cqe_file.name in existing_names:
+            st.info(f"'{cqe_file.name}' already uploaded for {client_key}.")
+        else:
+            if st.button("➕ Add Chat", key="cqe_add_btn", type="primary"):
+                if cqe_file.name.lower().endswith(".zip"):
+                    try:
+                        with zipfile.ZipFile(io.BytesIO(cqe_file.read())) as zf:
+                            txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
+                            if not txt_files:
+                                st.error("No .txt file found inside the zip.")
+                                st.stop()
+                            raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
+                    except Exception as e:
+                        st.error(f"Could not read zip: {e}")
+                        st.stop()
+                else:
+                    raw = cqe_file.read().decode("utf-8", "ignore")
+
+                parsed = parse_wa(raw)
+                meta   = parse_wa_meta(parsed)
+
+                if not meta["valid"] or meta["total"] < 5:
+                    st.warning("Doesn't look like a valid WhatsApp export (too few messages).")
+                else:
+                    st.session_state.kb_client_chats.append({
+                        "client":    client_key,
+                        "file_name": cqe_file.name,
+                        "content":   parsed,
+                        "added_at":  datetime.now().isoformat(),
+                        "size":      len(parsed),
+                        "meta":      meta,
+                    })
+                    save_kb()
+                    st.success(f"✅ Added '{cqe_file.name}' for {client_key} — {meta['total']:,} messages.")
+                    st.rerun()
+    elif cqe_file and not client_name_input.strip():
+        st.caption("Enter a client name above before uploading.")
+
+    # ── List uploaded client chats ────────────────────────────────
+    chats = st.session_state.get("kb_client_chats", [])
+    if not chats:
+        st.markdown(
+            "<div style='padding:24px;text-align:center;color:#475569;font-size:0.85rem'>"
+            "No client chats uploaded yet.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(f"<div style='font-weight:600;color:#A5B4FC;margin:16px 0 10px;font-size:0.82rem'>"
+                f"UPLOADED CLIENT CHATS — {len(chats)}</div>", unsafe_allow_html=True)
+
+    clients_seen: set[str] = set()
+    for i, chat in enumerate(chats):
+        cname = chat["client"]
+        if cname not in clients_seen:
+            clients_seen.add(cname)
+            st.markdown(
+                f"<div style='font-size:0.72rem;font-weight:700;color:#6366F1;letter-spacing:1px;"
+                f"text-transform:uppercase;margin:14px 0 6px'>{cname}</div>",
+                unsafe_allow_html=True,
+            )
+        meta = chat.get("meta", {})
+        total_m = meta.get("total", 0)
+        drange  = meta.get("date_range", "")
+        ca, cb = st.columns([6, 1])
+        with ca:
+            st.markdown(
+                f'<div class="file-row" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px 14px">'
+                f'<div style="display:flex;align-items:center;gap:8px">'
+                f'<span class="file-row-icon">💬</span>'
+                f'<span class="file-row-name">{chat["file_name"]}</span>'
+                f'<span class="file-row-meta">{chat["size"]:,} chars · {ts_label(chat["added_at"])}</span>'
+                f'</div>'
+                f'<div style="font-size:0.7rem;color:#6EE7B7;padding-left:24px">'
+                f'📅 {drange} &nbsp;·&nbsp; 💬 {total_m:,} messages</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with cb:
+            if st.button("Remove", key=f"rm_cqe_{i}", type="secondary"):
+                st.session_state.kb_client_chats.pop(i)
+                # Also clear generated Q&As for this client if no chats remain
+                remaining = [c for c in st.session_state.kb_client_chats if c["client"] == cname]
+                if not remaining:
+                    qas = st.session_state.get("kb_client_qas", {})
+                    qas.pop(cname, None)
+                    st.session_state.kb_client_qas = qas
+                save_kb(); st.rerun()
+
+    # ── Quick link to Client Engine page ─────────────────────────
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    if st.button("🎯 Go to Client Engine →", key="cqe_goto_btn", type="primary"):
+        st.session_state.page = "client_qa"
+        st.rerun()
+
+
+# ══════════════════════════════════════════════════════════════════
+#  CLIENT ENGINE — Q&A generator
+# ══════════════════════════════════════════════════════════════════
+
+_CQA_CATS = [
+    "Billing & Payments", "Technical Support", "Account Management",
+    "Product Features", "Onboarding & Setup", "Complaints & Escalations",
+    "General Inquiry", "Policy & Compliance", "Pricing & Plans",
+    "Integration & API", "Data & Reporting", "Other",
+]
+
+def _generate_client_qas(client_name: str, chats: list[dict], progress_cb=None) -> list[dict]:
+    """Generate clean support Q&A pairs from client WhatsApp chat exports."""
+    ai_client = get_client()
+    all_qas: list[dict] = []
+    total = len(chats)
+
+    for ci, chat in enumerate(chats):
+        content = chat.get("content", "").strip()
+        if not content:
+            continue
+        meta = chat.get("meta", {})
+        plist = ", ".join(meta.get("participants", [])[:6])
+        drange = meta.get("date_range", "")
+        total_m = meta.get("total", "?")
+
+        if progress_cb:
+            progress_cb(
+                0.1 + (ci / total) * 0.75,
+                f"🤖 Extracting Q&As from {chat['file_name']} ({ci+1}/{total})…",
+            )
+
+        prompt = (
+            f"You are a support knowledge engineer. Analyze this WhatsApp customer support chat for client: {client_name}.\n"
+            f"Participants: {plist}\n"
+            f"Date range: {drange} | Messages: {total_m}\n\n"
+            "TASK: Extract CLEAN, ACTIONABLE support Q&A pairs.\n\n"
+            "RULES:\n"
+            "• Focus ONLY on customer questions + agent/support answers.\n"
+            "• Rephrase the question in clean, general English (remove names, dates, chat noise).\n"
+            "• Answer should be concise (2–4 sentences), accurate, and support-friendly.\n"
+            "• SKIP: greetings, acknowledgements ('ok', 'noted', 'sure'), scheduling messages, media omitted, jokes.\n"
+            "• SKIP internal team discussions — only include customer-facing Q&As.\n"
+            "• Deduplicate: if same question appears multiple times, keep only the best answer.\n"
+            f"• Assign ONE category per Q&A from: {', '.join(_CQA_CATS)}.\n\n"
+            "Return ONLY raw JSON array:\n"
+            '[\n  {"category": "Technical Support", "question": "How do I reset my password?", '
+            '"answer": "Click Forgot Password on the login screen..."},\n  ...\n]\n\n'
+            "Be comprehensive — extract every genuine support Q&A pair.\n\n"
+            "CHAT:\n" + content[:MAX_CTX]
+        )
+
+        try:
+            r = ai_client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=12000,
+                messages=[{
+                    "role": "user",
+                    "content": [{"type": "text", "text": prompt,
+                                 "cache_control": {"type": "ephemeral"}}],
+                }],
+                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+            )
+            raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
+            raw = re.sub(r"\n?```$", "", raw)
+            items = json.loads(raw)
+            for item in items:
+                if isinstance(item, dict) and item.get("question"):
+                    all_qas.append({
+                        "id":           str(uuid.uuid4()),
+                        "category":     str(item.get("category", "General Inquiry")),
+                        "question":     str(item.get("question", "")),
+                        "answer":       str(item.get("answer", "")),
+                        "edited":       False,
+                        "source_file":  chat["file_name"],
+                        "generated_at": datetime.now().isoformat(),
+                    })
+        except Exception:
+            pass
+
+    if progress_cb:
+        progress_cb(0.9, "✨ Deduplicating…")
+
+    # Deduplicate by question
+    seen: set[str] = set()
+    deduped = []
+    for qa in all_qas:
+        key = qa["question"].lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(qa)
+
+    if progress_cb:
+        progress_cb(1.0, "✅ Done")
+
+    return deduped
+
+
+# ══════════════════════════════════════════════════════════════════
+#  CLIENT ENGINE — Main page
+# ══════════════════════════════════════════════════════════════════
+
+def render_client_qa():
+    render_topnav(show_settings_btn=True, show_back_btn=False)
+
+    # ── Inline CSS extras for this page ──────────────────────────
+    st.markdown("""
+    <style>
+    .cqa-header { padding: 32px 0 8px; }
+    .cqa-eyebrow {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: rgba(99,102,241,0.12);
+        border: 1px solid rgba(99,102,241,0.28);
+        border-radius: 100px; padding: 5px 16px;
+        font-size: 11px; font-weight: 700; letter-spacing: 2px;
+        text-transform: uppercase; color: #818CF8; margin-bottom: 12px;
+    }
+    .cqa-title {
+        font-size: 1.65rem; font-weight: 800; color: #E5E7EB;
+        background: linear-gradient(135deg, #E5E7EB 30%, #818CF8 70%, #22D3EE 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text; line-height: 1.15;
+    }
+    .cqa-sub { color: #6B7280; font-size: 14px; margin-top: 8px; line-height: 1.6; }
+
+    .client-pill {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 7px 18px; border-radius: 100px;
+        font-size: 0.8rem; font-weight: 600; cursor: pointer;
+        border: 1px solid rgba(255,255,255,0.09);
+        background: rgba(17,24,39,0.7); color: #9CA3AF;
+        transition: all .18s;
+    }
+    .client-pill-active {
+        background: rgba(99,102,241,0.2) !important;
+        border-color: rgba(99,102,241,0.5) !important;
+        color: #A5B4FC !important;
+    }
+
+    .cqa-stat-card {
+        background: rgba(17,24,39,0.85);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 14px; padding: 16px 20px; text-align: center;
+    }
+    .cqa-stat-val { font-size: 1.5rem; font-weight: 800; color: #818CF8; }
+    .cqa-stat-lbl { font-size: 11px; color: #4B5563; margin-top: 4px; }
+
+    .cqa-card {
+        background: rgba(13,17,23,0.9);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px; padding: 16px 18px;
+        margin-bottom: 8px; transition: border-color .2s;
+    }
+    .cqa-card:hover { border-color: rgba(99,102,241,0.3); }
+    .cqa-q {
+        font-size: 0.9rem; font-weight: 600; color: #E5E7EB;
+        line-height: 1.5; margin-bottom: 8px;
+    }
+    .cqa-a {
+        font-size: 0.83rem; color: #9CA3AF; line-height: 1.65;
+    }
+    .cqa-meta {
+        font-size: 0.7rem; color: #374151; margin-top: 8px;
+    }
+    .cqa-cat-badge {
+        display: inline-block; padding: 2px 10px;
+        background: rgba(99,102,241,0.12);
+        border: 1px solid rgba(99,102,241,0.2);
+        border-radius: 100px; font-size: 0.68rem;
+        color: #818CF8; font-weight: 600;
+        margin-right: 6px;
+    }
+    .cqa-edited-badge {
+        display: inline-block; padding: 2px 10px;
+        background: rgba(16,185,129,0.12);
+        border: 1px solid rgba(16,185,129,0.22);
+        border-radius: 100px; font-size: 0.68rem;
+        color: #6EE7B7; font-weight: 600;
+    }
+    .no-cqa {
+        text-align: center; padding: 60px 20px;
+        color: #374151;
+    }
+    .no-cqa h3 { color: #4B5563; font-size: 1.1rem; margin-bottom: 8px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    chats_all = st.session_state.get("kb_client_chats", [])
+    client_qas = st.session_state.get("kb_client_qas", {})
+
+    # ── Page header ───────────────────────────────────────────────
+    st.markdown("""
+    <div class="cqa-header">
+      <div class="cqa-eyebrow">✦ Client Engine</div>
+      <div class="cqa-title">Client Answer Engine</div>
+      <div class="cqa-sub">AI-generated Q&amp;A from per-client WhatsApp support chats — clean, searchable, editable.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Empty state ───────────────────────────────────────────────
+    if not chats_all:
+        st.markdown("""
+        <div class="no-cqa">
+          <div style="font-size:3rem;margin-bottom:16px">🎯</div>
+          <h3>No client chats uploaded yet</h3>
+          <p style="color:#374151;font-size:0.85rem">
+            Go to Settings → Client Engine to upload WhatsApp .txt exports per client.
+          </p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("⚙ Open Settings → Client Engine", type="primary"):
+            st.session_state.page = "settings"
+            st.rerun()
+        return
+
+    # ── Client list + selector ────────────────────────────────────
+    clients = list(dict.fromkeys(c["client"] for c in chats_all))
+    selected = st.session_state.get("cqa_selected", "") or clients[0]
+    if selected not in clients:
+        selected = clients[0]
+    st.session_state.cqa_selected = selected
+
+    if len(clients) > 1:
+        # Horizontal client selector
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        sel_cols = st.columns(min(len(clients), 6))
+        for ci, cname in enumerate(clients[:6]):
+            with sel_cols[ci]:
+                active = "✦ " if cname == selected else ""
+                if st.button(f"{active}{cname}", key=f"cqa_sel_{ci}",
+                             use_container_width=True, type="secondary"):
+                    st.session_state.cqa_selected = cname
+                    st.rerun()
+    else:
+        st.markdown(
+            f"<div style='font-size:1rem;font-weight:700;color:#A5B4FC;margin:12px 0 4px'>"
+            f"🏢 {selected}</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+
+    # ── Get data for selected client ──────────────────────────────
+    client_chats = [c for c in chats_all if c["client"] == selected]
+    qas = client_qas.get(selected, [])
+    n_qas    = len(qas)
+    n_cats   = len(set(q["category"] for q in qas))
+    n_edited = len([q for q in qas if q.get("edited")])
+    last_gen = qas[0].get("generated_at", "") if qas else ""
+    last_gen_label = ts_label(last_gen) if last_gen else "Never"
+
+    # ── Stats row ─────────────────────────────────────────────────
+    sc1, sc2, sc3, sc4, sc5 = st.columns(5)
+    with sc1:
+        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{n_qas}</div>'
+                    f'<div class="cqa-stat-lbl">Q&amp;As Generated</div></div>',
+                    unsafe_allow_html=True)
+    with sc2:
+        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{n_cats}</div>'
+                    f'<div class="cqa-stat-lbl">Categories</div></div>',
+                    unsafe_allow_html=True)
+    with sc3:
+        total_msgs = sum(c.get("meta", {}).get("total", 0) for c in client_chats)
+        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{total_msgs:,}</div>'
+                    f'<div class="cqa-stat-lbl">Source Messages</div></div>',
+                    unsafe_allow_html=True)
+    with sc4:
+        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{n_edited}</div>'
+                    f'<div class="cqa-stat-lbl">Edited by You</div></div>',
+                    unsafe_allow_html=True)
+    with sc5:
+        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val" '
+                    f'style="font-size:0.95rem">{last_gen_label}</div>'
+                    f'<div class="cqa-stat-lbl">Last Generated</div></div>',
+                    unsafe_allow_html=True)
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ── Action buttons ─────────────────────────────────────────────
+    ba1, ba2, ba3, ba4 = st.columns([2.5, 1.5, 1.5, 1.5])
+    with ba1:
+        gen_label = "✨ Generate Q&As" if not qas else "🔄 Regenerate Q&As"
+        gen_btn = st.button(gen_label, key="cqa_gen_btn", type="primary",
+                            use_container_width=True)
+    with ba2:
+        # Export Q&A as JSON
+        if qas:
+            st.download_button(
+                "⬇️ Export JSON", use_container_width=True,
+                data=json.dumps(qas, indent=2, ensure_ascii=False),
+                file_name=f"{selected}_qa.json", mime="application/json",
+                key="cqa_export_json",
+            )
+    with ba3:
+        if qas:
+            # Export as readable TXT
+            lines = []
+            for cat in sorted(set(q["category"] for q in qas)):
+                lines += [f"\n{'='*52}", f"  {cat.upper()}", f"{'='*52}\n"]
+                for idx, q in enumerate([x for x in qas if x["category"] == cat], 1):
+                    lines += [f"Q{idx}. {q['question']}", f"A:  {q['answer']}\n"]
+            st.download_button(
+                "⬇️ Export TXT", use_container_width=True,
+                data="\n".join(lines),
+                file_name=f"{selected}_qa.txt", mime="text/plain",
+                key="cqa_export_txt",
+            )
+    with ba4:
+        if qas and st.button("🗑️ Clear Q&As", key="cqa_clear_btn",
+                             use_container_width=True, type="secondary"):
+            cqas = st.session_state.get("kb_client_qas", {})
+            cqas.pop(selected, None)
+            st.session_state.kb_client_qas = cqas
+            save_kb(); st.rerun()
+
+    # ── Generate handler ──────────────────────────────────────────
+    if gen_btn:
+        prog_ph   = st.empty()
+        status_ph = st.empty()
+        prog_ph.progress(0.05)
+        status_ph.markdown(
+            "<span style='color:#A78BFA;font-size:0.85rem'>"
+            f"🤖 Generating Q&As for {selected}…</span>",
+            unsafe_allow_html=True,
+        )
+        try:
+            def _prog(pct, lbl):
+                prog_ph.progress(pct)
+                status_ph.markdown(
+                    f"<span style='color:#A78BFA;font-size:0.85rem'>{lbl}</span>",
+                    unsafe_allow_html=True,
+                )
+            new_qas = _generate_client_qas(selected, client_chats, _prog)
+            cqas = st.session_state.get("kb_client_qas", {})
+            cqas[selected] = new_qas
+            st.session_state.kb_client_qas = cqas
+            save_kb()
+            prog_ph.empty()
+            status_ph.success(
+                f"✅ {len(new_qas)} Q&As generated for {selected} across "
+                f"{len(set(q['category'] for q in new_qas))} categories."
+            )
+            st.rerun()
+        except Exception as e:
+            prog_ph.empty()
+            status_ph.error(f"Error: {e}")
+
+    # ── Q&A display ───────────────────────────────────────────────
+    if not qas:
+        st.markdown("""
+        <div class="no-cqa" style="padding:40px 20px">
+          <div style="font-size:2.5rem;margin-bottom:12px">💬</div>
+          <h3>No Q&As yet for this client</h3>
+          <p style="font-size:0.83rem;color:#374151">
+            Click "Generate Q&amp;As" above to extract support Q&amp;As from the uploaded chats.
+          </p>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # ── Search + filter ───────────────────────────────────────────
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    sf1, sf2 = st.columns([3, 1])
+    with sf1:
+        search_q = st.text_input(
+            "search", placeholder="🔍  Search questions and answers…",
+            label_visibility="collapsed", key="cqa_search",
+        )
+    with sf2:
+        cats_available = ["All categories"] + sorted(set(q["category"] for q in qas))
+        cat_filter = st.selectbox(
+            "category", cats_available,
+            label_visibility="collapsed", key="cqa_cat_filter",
+        )
+
+    slc = search_q.lower().strip() if search_q else ""
+
+    # Apply filters
+    filtered = qas
+    if cat_filter and cat_filter != "All categories":
+        filtered = [q for q in filtered if q["category"] == cat_filter]
+    if slc:
+        filtered = [
+            q for q in filtered
+            if slc in q["question"].lower() or slc in q["answer"].lower()
+        ]
+
+    st.markdown(
+        f"<div style='font-size:0.78rem;color:#374151;margin:8px 0 16px'>"
+        f"Showing <b style='color:#818CF8'>{len(filtered)}</b> of {n_qas} Q&amp;As</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Per-category groups ───────────────────────────────────────
+    cats_in_view = list(dict.fromkeys(q["category"] for q in filtered))
+    edit_id = st.session_state.get("cqa_edit_id", "")
+
+    for ccat_i, cat in enumerate(cats_in_view):
+        cat_items = [q for q in filtered if q["category"] == cat]
+        icon = _CAT_ICONS.get(cat, "📌")
+
+        with st.expander(
+            f"{icon}  {cat}  ·  {len(cat_items)} Q&As" + "\u200b" * ccat_i,
+            expanded=(len(cats_in_view) == 1 or ccat_i == 0),
+        ):
+            for qi, qa in enumerate(cat_items):
+                qa_id = qa["id"]
+                is_editing = (edit_id == qa_id)
+
+                edited_badge = (
+                    '<span class="cqa-edited-badge">✎ edited</span>'
+                    if qa.get("edited") else ""
+                )
+
+                st.markdown(
+                    f'<div class="cqa-card">'
+                    f'<div class="cqa-q">Q: {qa["question"]}</div>'
+                    + (f'<div class="cqa-a">A: {qa["answer"]}</div>' if not is_editing else "")
+                    + f'<div class="cqa-meta">'
+                    f'<span class="cqa-cat-badge">{cat}</span>'
+                    + edited_badge
+                    + f'<span style="margin-left:8px;color:#1F2937">'
+                    f'📁 {qa.get("source_file","")}</span>'
+                    f'</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+                if is_editing:
+                    new_ans = st.text_area(
+                        "Edit answer", value=qa["answer"],
+                        key=f"cqa_edit_area_{qa_id}", height=120,
+                        label_visibility="collapsed",
+                    )
+                    ec1, ec2 = st.columns([1, 1])
+                    with ec1:
+                        if st.button("✅ Save", key=f"cqa_save_{qa_id}", type="primary",
+                                     use_container_width=True):
+                            cqas = st.session_state.get("kb_client_qas", {})
+                            for item in cqas.get(selected, []):
+                                if item["id"] == qa_id:
+                                    item["answer"] = new_ans
+                                    item["edited"] = True
+                                    break
+                            st.session_state.kb_client_qas = cqas
+                            st.session_state.cqa_edit_id = ""
+                            save_kb(); st.rerun()
+                    with ec2:
+                        if st.button("✕ Cancel", key=f"cqa_cancel_{qa_id}",
+                                     use_container_width=True):
+                            st.session_state.cqa_edit_id = ""
+                            st.rerun()
+                else:
+                    eb1, eb2 = st.columns([1, 1])
+                    with eb1:
+                        if st.button("✎ Edit answer", key=f"cqa_edit_{qi}_{ccat_i}",
+                                     use_container_width=True):
+                            st.session_state.cqa_edit_id = qa_id
+                            st.rerun()
+                    with eb2:
+                        if st.button("🗑 Delete", key=f"cqa_del_{qi}_{ccat_i}",
+                                     use_container_width=True, type="secondary"):
+                            cqas = st.session_state.get("kb_client_qas", {})
+                            cqas[selected] = [x for x in cqas.get(selected, [])
+                                              if x["id"] != qa_id]
+                            st.session_state.kb_client_qas = cqas
+                            save_kb(); st.rerun()
+
+
 def _render_mini_chat():
     """Inline chat panel rendered as a side column on the FAQ page."""
     # ── Panel header
@@ -3049,7 +3662,7 @@ div[data-testid="stVerticalBlock"]:has(#cf-panel-mk):not(:has(div[data-testid="s
 
 
 def render_faq():
-    render_topnav(show_settings_btn=False, show_back_btn=False, show_chat_btn=True)
+    render_topnav(show_settings_btn=False, show_back_btn=False, show_chat_btn=True, show_client_btn=True)
 
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
@@ -3194,5 +3807,7 @@ if st.session_state.page == "chat":
     render_chat()
 elif st.session_state.page == "settings":
     render_settings()
+elif st.session_state.page == "client_qa":
+    render_client_qa()
 elif st.session_state.page == "faq":
     render_faq()
