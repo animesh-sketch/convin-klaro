@@ -4806,9 +4806,9 @@ def render_faq():
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
 
-    # Partition into Client Use Cases (WhatsApp: + Client Learnings:), generic, and curated
-    wa_faqs      = [f for f in faqs if f["category"].startswith("WhatsApp:")
-                    or f["category"].startswith("Client Learnings:")]
+    # Partition Q&As by prefix
+    wa_specific  = [f for f in faqs if f["category"].startswith("WhatsApp:")]
+    wa_generic   = [f for f in faqs if f["category"].startswith("Client Learnings:")]
     generic_faqs = [f for f in faqs if not f["category"].startswith("WhatsApp:")
                     and not f["category"].startswith("Client Learnings:")]
 
@@ -4818,14 +4818,10 @@ def render_faq():
         bucket = [f for f in faqs if f["category"] == cat]
         faq_curated.extend(bucket[:_FAQ_CAP_PER_CAT])
 
-    all_cats = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
-    wa_cats  = list(dict.fromkeys(f["category"] for f in wa_faqs))
-
     # ── Main content — always full-width ──────────────────────────
     with st.container():
 
     # ── Hero ──────────────────────────────────────────────────────
-        # ── Landing Hero ──────────────────────────────────────────────
         st.markdown(
             f'<div class="lp-hero"><div class="lp-hero-inner">'
             f'<div class="lp-eyebrow"><span class="dot"></span>Convin Sense &nbsp;&middot;&nbsp; AI Knowledge Platform</div>'
@@ -4841,18 +4837,19 @@ def render_faq():
             f'<div class="lp-stats">'
             f'<div class="lp-stat lp-stat-v"><span class="n">{len(faq_curated)}</span><div class="l">Curated FAQ</div></div>'
             f'<div class="lp-stat lp-stat-p"><span class="n">{len(generic_faqs)}</span><div class="l">Q&amp;A Pairs</div></div>'
-            f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_faqs)}</span><div class="l">Client Use Cases</div></div>'
-            f'<div class="lp-stat lp-stat-g"><span class="n">{total}</span><div class="l">KB Sources</div></div>'
+            f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_specific)}</span><div class="l">Use Cases</div></div>'
+            f'<div class="lp-stat lp-stat-g"><span class="n">{len(wa_generic)}</span><div class="l">More Q&amp;A</div></div>'
             f'</div>'
             f'</div></div>',
             unsafe_allow_html=True,
         )
 
         # ── 5-Tab layout ──────────────────────────────────────────────
-        tab_faq, tab_generic, tab_wa, tab_flow = st.tabs([
+        tab_faq, tab_generic, tab_use, tab_more, tab_flow = st.tabs([
             f"📋  FAQ  ({len(faq_curated)})",
             f"💡  Q&A  ({len(generic_faqs)})",
-            f"📚  Client Use Cases  ({len(wa_faqs)})",
+            f"📚  Use Cases  ({len(wa_specific)})",
+            f"🔍  More Q&A  ({len(wa_generic)})",
             f"🗺️  Process Flow",
         ])
 
@@ -4870,14 +4867,21 @@ def render_faq():
                 no_content_msg="No Q&As yet — add docs or web links in Settings",
             )
 
-        # ── Tab 3: Client Use Cases ───────────────────────────────────
-        with tab_wa:
+        # ── Tab 3: Use Cases (WhatsApp pilot chats — client context) ──
+        with tab_use:
             _render_category_dashboard(
-                wa_faqs, "wa",
-                no_content_msg="No Q&As yet — upload chats in Settings → Client Use Cases, then click Generate Generic Q&As",
+                wa_specific, "use",
+                no_content_msg="No Use Cases yet — upload WhatsApp chats in Settings → Client Use Cases",
             )
 
-        # ── Tab 4: Process Flowchart ──────────────────────────────────
+        # ── Tab 4: More Q&A (generic learnings — no client names) ─────
+        with tab_more:
+            _render_category_dashboard(
+                wa_generic, "more",
+                no_content_msg="No Q&As yet — click Generate Generic Q&As in Settings → Client Use Cases",
+            )
+
+        # ── Tab 5: Process Flowchart ──────────────────────────────────
         with tab_flow:
             _render_flowchart_tab()
 
