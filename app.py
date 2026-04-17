@@ -2472,7 +2472,7 @@ def _render_category_dashboard(subset: list[dict], tab_key: str, no_content_msg:
         icon = _CAT_ICONS.get(cat, "📌")
         label = cat.replace("WhatsApp: ", "")
         bucket = [f for f in subset if f["category"] == cat]
-        with st.expander(f"{icon}  {label}  ·  {count} Q&As", expanded=False, key=f"exp_{tab_key}_{ci}"):
+        with st.expander(f"{icon}  {label}  ·  {count} Q&As", expanded=False):
             _render_faq_list(bucket, f"{tab_key}_{ci}", f"search_{tab_key}_{ci}")
 
 def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
