@@ -4237,15 +4237,61 @@ def _render_mini_chat():
 
 
 def _render_chat_float():
-    """Stable floating chat bubble.
+    """Floating 💬 FAB always visible; click opens a full-height sidebar from top-right.
 
-    Uses stVerticalBlockBorderWrapper:has(style#anchor) targeting — same technique
-    as streamlit-float. Wrapping in st.container() gives the anchor a scoped
-    stVerticalBlockBorderWrapper so the :not() selector reliably picks the innermost one.
+    Uses stVerticalBlockBorderWrapper:has(style#anchor):not(...) targeting —
+    the st.container() wrapper creates a scoped stVerticalBlockBorderWrapper so
+    :not() reliably picks the innermost one without touching the page container.
     """
     chat_open = st.session_state.get("chat_open", False)
 
-    # ── FAB (closed state) ────────────────────────────────────────
+    # ── FAB — always rendered at bottom-right ─────────────────────
+    with st.container():
+        fab_icon = "✕" if chat_open else "💬"
+        st.markdown(f"""
+<style>
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a):not(
+    :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a))
+) {{
+    position: fixed !important;
+    bottom: 32px !important;
+    right: 32px !important;
+    width: 64px !important;
+    z-index: 999999 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a):not(
+    :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a))
+) > div {{ padding: 0 !important; gap: 0 !important; }}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a) .stButton > button {{
+    width: 62px !important;
+    height: 62px !important;
+    border-radius: 50% !important;
+    padding: 0 !important;
+    font-size: {"1.3rem" if chat_open else "1.55rem"} !important;
+    line-height: 1 !important;
+    background: {"rgba(99,102,241,0.85)" if chat_open else "linear-gradient(135deg,#8B5CF6,#6366F1 55%,#EC4899)"} !important;
+    border: {"1px solid rgba(99,102,241,0.4)" if chat_open else "none"} !important;
+    color: #fff !important;
+    box-shadow: 0 4px 24px rgba(139,92,246,0.6) !important;
+    transition: transform 0.2s cubic-bezier(.34,1.56,.64,1), background 0.2s !important;
+    {"" if chat_open else "animation: fab-pulse 2.8s ease-in-out infinite !important;"}
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a) .stButton > button:hover {{
+    transform: scale(1.1) !important;
+    box-shadow: 0 6px 32px rgba(139,92,246,0.75) !important;
+}}
+</style>
+<style id="cf-fab-a"></style>
+""", unsafe_allow_html=True)
+        if st.button(fab_icon, key="cf_fab_toggle", help="Open / close chat"):
+            st.session_state.chat_open = not chat_open
+            st.session_state.quick_q = ""
+            st.rerun()
+
+    # ── Sidebar panel — only when open ───────────────────────────
     if not chat_open:
         with st.container():
             st.markdown("""
@@ -4296,7 +4342,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-fab-a) .stButton > 
                 st.rerun()
         return
 
-    # ── Chat panel (open state) ───────────────────────────────────
+    # ── Sidebar panel — top-right, full height ────────────────────
     with st.container():
         st.markdown("""
 <style>
@@ -4304,75 +4350,64 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a):not(
     :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a))
 ) {
     position: fixed !important;
-    bottom: 28px !important;
-    right: 28px !important;
-    width: 384px !important;
-    z-index: 999999 !important;
-    background: rgba(10,13,22,0.97) !important;
-    border: 1px solid rgba(99,102,241,0.28) !important;
-    border-radius: 20px !important;
-    box-shadow: 0 24px 64px rgba(0,0,0,0.75),
-                0 0 0 1px rgba(99,102,241,0.1) inset,
-                0 0 40px rgba(99,102,241,0.06) inset !important;
-    backdrop-filter: blur(24px) !important;
-    overflow: hidden !important;
-    max-height: 88vh !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 380px !important;
+    height: 100vh !important;
+    z-index: 999998 !important;
+    background: rgba(8,11,20,0.98) !important;
+    border-left: 1px solid rgba(99,102,241,0.25) !important;
+    border-top: none !important;
+    border-bottom: none !important;
+    border-right: none !important;
+    border-radius: 0 !important;
+    box-shadow: -12px 0 48px rgba(0,0,0,0.65),
+                0 0 0 1px rgba(99,102,241,0.06) inset !important;
+    backdrop-filter: blur(28px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
 div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a):not(
     :has(div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a))
 ) > div {
     padding: 0 !important;
     gap: 0 !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
 }
-/* Panel close button */
-div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a) .cf-close-btn button {
-    padding: 2px 10px !important;
-    font-size: 0.72rem !important;
-    border-radius: 8px !important;
-    min-height: 26px !important;
-    height: 26px !important;
-}
-/* Send button */
+/* Send button compact */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a) [data-testid="stColumns"] [data-testid="column"]:last-child button {
-    height: 38px !important;
-    padding: 0 !important;
+    height: 38px !important; padding: 0 !important;
 }
 /* Clear chat button */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(style#cf-panel-a) .cf-clear-wrap button {
-    font-size: 0.72rem !important;
-    min-height: 28px !important;
-    height: 28px !important;
-    border-radius: 8px !important;
+    font-size: 0.72rem !important; min-height: 28px !important;
+    height: 28px !important; border-radius: 8px !important;
 }
 </style>
 <style id="cf-panel-a"></style>
 """, unsafe_allow_html=True)
 
-        # Panel header
+        # ── Panel header
         st.markdown("""
-<div style="padding:15px 18px 11px;border-bottom:1px solid rgba(99,102,241,0.15);
-display:flex;align-items:center;justify-content:space-between;gap:10px">
-  <div style="display:flex;align-items:center;gap:10px">
+<div style="padding:20px 20px 14px;border-bottom:1px solid rgba(99,102,241,0.14);
+background:linear-gradient(180deg,rgba(99,102,241,0.08) 0%,transparent 100%);
+flex-shrink:0;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
     <div style="width:9px;height:9px;border-radius:50%;background:#10B981;
-    box-shadow:0 0 7px #10B981;animation:fab-pulse 2.5s ease-in-out infinite;flex-shrink:0"></div>
-    <div>
-      <div style="font-weight:700;font-size:0.88rem;color:#E5E7EB;line-height:1.2">AI Chat</div>
-      <div style="font-size:0.68rem;color:#4B5563;line-height:1.2">Animesh · Powered by Claude</div>
-    </div>
+    box-shadow:0 0 8px #10B981;animation:fab-pulse 2.5s ease-in-out infinite;flex-shrink:0"></div>
+    <div style="font-weight:800;font-size:1rem;color:#E5E7EB;letter-spacing:-0.01em">AI Chat</div>
   </div>
-  <div style="font-size:0.7rem;color:#374151">Ask anything about Convin Sense</div>
+  <div style="font-size:0.72rem;color:#4B5563;padding-left:19px">
+    Ask anything about Convin Sense · Powered by Claude
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
-        # Close button
-        st.markdown('<div style="text-align:right;padding:6px 14px 2px" class="cf-close-btn">', unsafe_allow_html=True)
-        if st.button("✕ Close", key="cf_close", type="secondary"):
-            st.session_state.chat_open = False
-            st.session_state.quick_q = ""
-            st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Message history
+        # ── Message history
         history = st.session_state.get("chat_history", [])
         if history:
             msgs_html = ""
@@ -4383,23 +4418,21 @@ display:flex;align-items:center;justify-content:space-between;gap:10px">
                     msgs_html += f'<div class="cf-user-bubble">{safe}</div>'
                 else:
                     msgs_html += f'<div class="cf-ai-bubble">{c}</div>'
-            st.markdown(f'<div class="cf-msgs">{msgs_html}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="cf-msgs" style="flex:1">{msgs_html}</div>', unsafe_allow_html=True)
         else:
             st.markdown("""
-<div class="cf-msgs">
+<div class="cf-msgs" style="flex:1">
   <div class="cf-empty">
     <span class="cf-empty-icon">✦</span>
     Hi, I'm Animesh.<br>Ask me anything about Convin Sense.
   </div>
 </div>""", unsafe_allow_html=True)
 
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Streaming placeholder
+        # ── Streaming placeholder
         stream_ph = st.empty()
 
-        # Input row
-        st.markdown('<div class="cf-input-row">', unsafe_allow_html=True)
+        # ── Input row
+        st.markdown('<div class="cf-input-row" style="flex-shrink:0;border-top:1px solid rgba(99,102,241,0.12);padding:10px 12px 10px">', unsafe_allow_html=True)
         in_col, send_col = st.columns([5, 1])
         with in_col:
             pre = st.session_state.get("quick_q", "")
@@ -4414,7 +4447,7 @@ display:flex;align-items:center;justify-content:space-between;gap:10px">
             send_btn = st.button("↵", key="cf_send", type="primary")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Handle send
+        # ── Handle send
         active = user_input.strip() if user_input else ""
         if (send_btn or active) and active and active != st.session_state.get("_mini_last", ""):
             st.session_state["_mini_last"] = active
@@ -4424,9 +4457,9 @@ display:flex;align-items:center;justify-content:space-between;gap:10px">
             st.session_state.chat_history.append({"role": "assistant", "content": answer, "ts": ts, "sources": sources})
             st.rerun()
 
-        # Clear button
+        # ── Clear button
         if history:
-            st.markdown('<div style="padding:4px 12px 10px" class="cf-clear-wrap">', unsafe_allow_html=True)
+            st.markdown('<div style="padding:4px 12px 12px" class="cf-clear-wrap">', unsafe_allow_html=True)
             if st.button("🗑 Clear chat", key="cf_clear", type="secondary", use_container_width=True):
                 st.session_state.chat_history = []
                 st.session_state["_mini_last"] = ""
