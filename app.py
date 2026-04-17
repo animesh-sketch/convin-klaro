@@ -4,6 +4,7 @@ AI-powered knowledge & support intelligence platform
 """
 
 import streamlit as st
+import streamlit.components.v1 as _components
 import json, re, os, base64, zipfile, io
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -2651,14 +2652,15 @@ def _render_mini_chat():
 
 
 def _float_via_js(marker_id: str, width: str, bottom: str = "24px", right: str = "24px", z: str = "9999"):
-    """Inject JS that positions the Streamlit container holding `marker_id` as fixed overlay."""
-    st.markdown(f"""<script>
+    """Position the Streamlit container holding `marker_id` as a fixed overlay."""
+    _components.html(f"""<script>
 (function(){{
     var F=function(){{
-        var m=document.getElementById('{marker_id}');
-        if(!m)return;
+        var doc=window.parent.document;
+        var m=doc.getElementById('{marker_id}');
+        if(!m)return false;
         var el=m;
-        for(var i=0;i<14;i++){{
+        for(var i=0;i<30;i++){{
             el=el.parentElement;
             if(!el)break;
             var t=el.getAttribute&&el.getAttribute('data-testid');
@@ -2670,13 +2672,14 @@ def _float_via_js(marker_id: str, width: str, bottom: str = "24px", right: str =
                 el.style.setProperty('z-index','{z}','important');
                 el.style.setProperty('margin','0','important');
                 el.style.setProperty('padding','0','important');
-                break;
+                return true;
             }}
         }}
+        return false;
     }};
-    F();setTimeout(F,80);setTimeout(F,300);
+    if(!F()){{setTimeout(F,100);setTimeout(F,400);setTimeout(F,1000);}}
 }})();
-</script>""", unsafe_allow_html=True)
+</script>""", height=0)
 
 
 def _render_chat_float():
