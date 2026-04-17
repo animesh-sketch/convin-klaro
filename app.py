@@ -2767,8 +2767,10 @@ def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
         )
 
         for idx, faq in enumerate(cat_faqs):
-            q_disp = faq["question"]
-            a_disp = faq["answer"]
+            q_disp = faq.get("question", "")
+            a_disp = faq.get("answer", "")
+            if not q_disp or not a_disp:
+                continue
 
             has_wa = "💬 Chatted by" in a_disp or "chatted by" in a_disp.lower()
             badge_html = (

@@ -8737,10 +8737,6 @@
       "answer": "Key checklist items: (1) Secure virtual phone numbers (procure from dialer provider like Exotel; whitelist with client's systems); (2) Register WhatsApp Business Account (WABA) and template types (Utility vs. Marketing); (3) Ensure payment/wallet balance in WABA to avoid message delivery failures; (4) Upload and clean lead CSV with required fields and proper formatting; (5) Complete UAT with 5–10 test calls, verifying script adherence, pronunciation, latency, and appointment scheduling; (6) Get stakeholder alignment on conversion benchmarks and ROI expectations *before* campaign launch; (7) Configure campaign settings including initial_message (mandatory), lead ingestion API variables, and NBA (Next Best Action) retry rules; (8) Test template delivery across different message types to validate rates (typically 35–40% with marketing templates vs. higher with utility templates)."
     },
     {
-      "category": "Client Learnings: Lead Data & CSV Quality",
-      "question": "What makes a lead CSV 'good' vs. 'bad' in practice?"
-    },
-    {
       "category": "Client Learnings: WhatsApp & Multi-Channel",
       "question": "What are the typical WhatsApp message delivery rates and failure modes?",
       "answer": "Marketing template messages typically achieve 35–40% delivery rates; Utility template messages see higher rates. Common failure modes: (1) Payment issues in WABA account (blocks all message delivery); (2) Template rejection by Meta (content violates policy); (3) Number not whitelisted by Meta (for utility templates); (4) Batch message sending in rapid succession causes delivery delays or failures. When 85% of messages fail due to marketing template rejection, switch to Utility template or adjust messaging. Ensure WABA payment is current before launching campaigns; delayed payment detection is a leading cause of campaign stalls."
