@@ -4,7 +4,6 @@ AI-powered knowledge & support intelligence platform
 """
 
 import streamlit as st
-import streamlit.components.v1 as _components
 import json, re, os, base64, zipfile, io
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -2472,7 +2471,7 @@ def _render_category_dashboard(subset: list[dict], tab_key: str, no_content_msg:
         icon = _CAT_ICONS.get(cat, "📌")
         label = cat.replace("WhatsApp: ", "")
         bucket = [f for f in subset if f["category"] == cat]
-        with st.expander(f"{icon}  {label}  ·  {count} Q&As", expanded=False, key=f"exp_{tab_key}_{ci}"):
+        with st.expander(f"{icon}  {label}  ·  {count} Q&As" + "\u200b" * ci, expanded=False):
             _render_faq_list(bucket, f"{tab_key}_{ci}", f"search_{tab_key}_{ci}")
 
 def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
@@ -2547,7 +2546,7 @@ def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
                 a_disp,
             )
 
-            with st.expander(f"Q: {faq['question']}", expanded=False, key=f"qexp_{tab_key}_{cat}_{idx}"):
+            with st.expander(f"Q: {faq['question']}" + "\u200b" * idx, expanded=False):
                 st.markdown(
                     f"<div class='faq-answer-wrap'>"
                     f"<div style='margin-bottom:10px'>{badge_html}</div>"
@@ -2651,54 +2650,46 @@ def _render_mini_chat():
         st.rerun()
 
 
-def _float_via_js(marker_id: str, width: str, bottom: str = "24px", right: str = "24px", z: str = "9999"):
-    """Position the Streamlit container holding `marker_id` as a fixed overlay."""
-    _components.html(f"""<script>
-(function(){{
-    var F=function(){{
-        var doc=window.parent.document;
-        var m=doc.getElementById('{marker_id}');
-        if(!m)return false;
-        var el=m;
-        for(var i=0;i<30;i++){{
-            el=el.parentElement;
-            if(!el)break;
-            var t=el.getAttribute&&el.getAttribute('data-testid');
-            if(t==='stVerticalBlock'){{
-                el.style.setProperty('position','fixed','important');
-                el.style.setProperty('bottom','{bottom}','important');
-                el.style.setProperty('right','{right}','important');
-                el.style.setProperty('width','{width}','important');
-                el.style.setProperty('z-index','{z}','important');
-                el.style.setProperty('margin','0','important');
-                el.style.setProperty('padding','0','important');
-                return true;
-            }}
-        }}
-        return false;
-    }};
-    if(!F()){{setTimeout(F,100);setTimeout(F,400);setTimeout(F,1000);}}
-}})();
-</script>""", height=0)
-
-
 def _render_chat_float():
-    """Floating chat overlay — stays on the landing page, no layout shift."""
+    """Floating chat bubble — pure CSS :has() positioning, no JS needed."""
     chat_open = st.session_state.get("chat_open", False)
 
     if not chat_open:
-        # ── FAB only ──────────────────────────────────────────────
-        st.markdown('<div id="cf-fab-mk" style="display:none"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="cf-fab-wrap">', unsafe_allow_html=True)
+        # Inject CSS that fixes the innermost stVerticalBlock containing the marker
+        st.markdown("""
+<style>
+div[data-testid="stVerticalBlock"]:has(> div > div > #cf-fab-mk),
+div[data-testid="stVerticalBlock"]:has(#cf-fab-mk):not(:has(div[data-testid="stVerticalBlock"]:has(#cf-fab-mk))) {
+    position: fixed !important;
+    bottom: 28px !important;
+    right: 28px !important;
+    width: 64px !important;
+    z-index: 99999 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+}
+</style>
+<div id="cf-fab-mk" style="display:none"></div>""", unsafe_allow_html=True)
         if st.button("💬", key="cf_fab_open", help="Chat with Animesh"):
             st.session_state.chat_open = True
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-        _float_via_js("cf-fab-mk", "64px")
         return
 
     # ── Full chat panel ───────────────────────────────────────────
-    st.markdown('<div id="cf-panel-mk" style="display:none"></div>', unsafe_allow_html=True)
+    st.markdown("""
+<style>
+div[data-testid="stVerticalBlock"]:has(#cf-panel-mk):not(:has(div[data-testid="stVerticalBlock"]:has(#cf-panel-mk))) {
+    position: fixed !important;
+    bottom: 90px !important;
+    right: 28px !important;
+    width: 370px !important;
+    z-index: 99999 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+</style>
+<div id="cf-panel-mk" style="display:none"></div>""", unsafe_allow_html=True)
     st.markdown('<div class="cf-shell">', unsafe_allow_html=True)
 
     # Header
@@ -2783,7 +2774,6 @@ def _render_chat_float():
         st.markdown('</div>', unsafe_allow_html=True)
 
     # JS: position this block fixed in bottom-right
-    _float_via_js("cf-panel-mk", "370px", bottom="90px")
 
 
 def render_faq():
