@@ -5,7 +5,7 @@ AI-powered knowledge & support intelligence platform
 
 import streamlit as st
 import streamlit.components.v1 as _components
-import json, re, os, base64, zipfile, io, uuid
+import json, re, os, base64, zipfile, io, uuid, time
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import anthropic
@@ -1573,7 +1573,7 @@ def build_chat_context() -> tuple[str, list[str]]:
         names.append(d["name"])
 
     ctx = "\n\n".join(parts)
-    return ctx[:180_000], names
+    return ctx[:120_000], names
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -1666,21 +1666,26 @@ def ask_claude_stream(query: str, placeholder) -> tuple[str, list[str]]:
                for m in st.session_state.chat_history[-6:]]
     history.append({"role": "user", "content": query})
 
+    placeholder.markdown("*Thinking…*")
     full_text = ""
+    last_ui = 0.0
     try:
         with get_client().messages.stream(
             model="claude-haiku-4-5-20251001",
-            max_tokens=600,
+            max_tokens=700,
             system=system,
             messages=history,
             extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
         ) as stream:
             for text in stream.text_stream:
                 full_text += text
-                placeholder.markdown(full_text + " ▌")
+                now = time.time()
+                if now - last_ui >= 0.06:          # ~16 UI updates/sec max
+                    placeholder.markdown(full_text + " ▌")
+                    last_ui = now
         placeholder.markdown(full_text)
     except Exception as e:
-        full_text = f"Something went wrong — please try again. *(Error: {e})*"
+        full_text = f"⚠️ Error: {e}"
         placeholder.markdown(full_text)
 
     return full_text, names
@@ -4770,14 +4775,10 @@ background:linear-gradient(180deg,rgba(99,102,241,.07) 0%,transparent 100%)">
             if active:
                 ts = datetime.now().strftime("%H:%M")
                 st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts})
-                with stream_ph.container():
-                    st.markdown(
-                        '<div class="cf-ai-bubble" style="opacity:.6;font-style:italic">'
-                        'Thinking…</div>', unsafe_allow_html=True
-                    )
                 answer, sources = ask_claude_stream(active, stream_ph)
                 st.session_state.chat_history.append({"role": "assistant", "content": answer,
                                                       "ts": ts, "sources": sources})
+                stream_ph.empty()
                 st.rerun()
 
         if history:
