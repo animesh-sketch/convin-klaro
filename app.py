@@ -481,20 +481,20 @@ div[data-testid="stFileUploader"]:hover {
     background: rgba(10,8,25,0.70);
     backdrop-filter: blur(18px);
     border-radius: 14px; padding: 5px; gap: 3px;
-    border: 1px solid rgba(139,92,246,0.18);
+    border: 1px solid rgba(29,78,216,0.35);
     box-shadow: 0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04);
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 10px !important; font-size: 0.8rem !important;
-    font-weight: 600 !important; padding: 8px 18px !important;
-    color: #6B7280 !important;
+    border-radius: 10px !important; font-size: 0.85rem !important;
+    font-weight: 700 !important; padding: 9px 20px !important;
+    color: #93C5FD !important;
     transition: color 0.2s, background 0.2s !important;
 }
-.stTabs [data-baseweb="tab"]:hover { color: #C4B5FD !important; background: rgba(139,92,246,0.07) !important; }
+.stTabs [data-baseweb="tab"]:hover { color: #fff !important; background: rgba(29,78,216,0.18) !important; }
 .stTabs [aria-selected="true"] {
-    background: linear-gradient(135deg, rgba(139,92,246,0.22), rgba(99,102,241,0.16)) !important;
-    color: #C4B5FD !important;
-    box-shadow: 0 0 0 1px rgba(139,92,246,0.35), 0 4px 14px rgba(139,92,246,0.18) !important;
+    background: linear-gradient(135deg, rgba(29,78,216,0.45), rgba(37,99,235,0.35)) !important;
+    color: #fff !important;
+    box-shadow: 0 0 0 1px rgba(59,130,246,0.6), 0 4px 14px rgba(29,78,216,0.35) !important;
 }
 
 /* Toggle */
