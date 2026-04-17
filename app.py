@@ -5,7 +5,8 @@ AI-powered knowledge & support intelligence platform
 
 import streamlit as st
 import streamlit.components.v1 as _components
-import json, re, os, base64, zipfile, io, uuid, time
+import json, re, os, base64, zipfile, io, uuid, time, random, smtplib
+from email.mime.text import MIMEText
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import anthropic
@@ -1159,6 +1160,12 @@ def total_sources():
 # ══════════════════════════════════════════════════════════════════
 _DEFAULTS = {
     "page":               "faq",
+    "logged_in":          False,
+    "login_user":         "",
+    "otp_code":           "",
+    "otp_email":          "",
+    "otp_expiry":         0.0,
+    "otp_step":           "email",
     "chat_open":          False,
     "chat_minimized":     False,
     "chat_history":       [],
@@ -1926,6 +1933,131 @@ def generate_faqs(progress_cb=None) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════
 #  SHARED TOP NAV
 # ══════════════════════════════════════════════════════════════════
+#  OTP LOGIN
+# ══════════════════════════════════════════════════════════════════
+
+def _send_otp(to_email: str, otp: str) -> bool:
+    """Send OTP via SMTP. Returns True on success."""
+    try:
+        host = st.secrets.get("SMTP_HOST", "smtp.gmail.com")
+        port = int(st.secrets.get("SMTP_PORT", 587))
+        user = st.secrets.get("SMTP_USER", "")
+        pwd  = st.secrets.get("SMTP_PASS", "")
+        if not (user and pwd):
+            return False
+        msg = MIMEText(
+            f"Hi,\n\nYour Convin Klaro login code is:\n\n"
+            f"  {otp}\n\n"
+            f"This code expires in 10 minutes. Do not share it.\n\n"
+            f"— Convin Klaro",
+            "plain",
+        )
+        msg["Subject"] = f"Your Convin Klaro OTP: {otp}"
+        msg["From"]    = user
+        msg["To"]      = to_email
+        with smtplib.SMTP(host, port) as s:
+            s.ehlo(); s.starttls(); s.ehlo()
+            s.login(user, pwd)
+            s.sendmail(user, [to_email], msg.as_string())
+        return True
+    except Exception:
+        return False
+
+
+def render_login():
+    """Two-step OTP login page."""
+    st.markdown("""
+<style>
+body,.stApp{background:#080B18!important;}
+.login-wrap{
+    min-height:100vh;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse 90% 60% at 50% 0%,rgba(99,102,241,.18) 0%,transparent 65%);
+}
+.login-card{
+    background:rgba(13,16,30,.96);border:1px solid rgba(99,102,241,.18);
+    border-radius:20px;padding:40px 36px 36px;width:100%;max-width:420px;
+    box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(99,102,241,.06) inset;
+}
+.login-logo{
+    width:48px;height:48px;border-radius:14px;
+    background:linear-gradient(135deg,#7C3AED,#6366F1);
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.5rem;margin:0 auto 18px;
+    box-shadow:0 4px 20px rgba(99,102,241,.45);
+}
+.login-title{font-size:1.35rem;font-weight:800;color:#F3F4F6;text-align:center;
+    letter-spacing:-.02em;margin-bottom:4px;}
+.login-sub{font-size:.8rem;color:#6B7280;text-align:center;margin-bottom:28px;}
+.login-label{font-size:.75rem;color:#9CA3AF;font-weight:500;margin-bottom:6px;
+    letter-spacing:.3px;text-transform:uppercase;}
+.login-divider{border:none;border-top:1px solid rgba(99,102,241,.12);margin:20px 0;}
+</style>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">🔐</div>
+    <div class="login-title">Convin Klaro</div>
+    <div class="login-sub">AI Support Intelligence · Sign in to continue</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+    _, col, _ = st.columns([1, 2, 1])
+    with col:
+        step = st.session_state.get("otp_step", "email")
+
+        if step == "email":
+            st.markdown('<div class="login-label">Work email</div>', unsafe_allow_html=True)
+            email = st.text_input("email", placeholder="you@convin.ai",
+                                  label_visibility="collapsed", key="login_email_input")
+            if st.button("Send OTP →", type="primary", use_container_width=True):
+                email = (email or "").strip().lower()
+                allowed = list(st.secrets.get("ALLOWED_EMAILS", ["animesh@convin.ai"]))
+                if email not in [e.lower() for e in allowed]:
+                    st.error("This email is not authorised to access Convin Klaro.")
+                else:
+                    otp = str(random.randint(100000, 999999))
+                    ok  = _send_otp(email, otp)
+                    if ok:
+                        st.session_state.otp_code   = otp
+                        st.session_state.otp_email  = email
+                        st.session_state.otp_expiry = time.time() + 600
+                        st.session_state.otp_step   = "verify"
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Could not send email — SMTP not configured yet. "
+                                   "Add SMTP_PASS to secrets.toml.")
+
+        elif step == "verify":
+            sent_to = st.session_state.get("otp_email", "")
+            st.success(f"OTP sent to **{sent_to}** — check your inbox.")
+            st.markdown('<div class="login-label" style="margin-top:16px">Enter 6-digit code</div>',
+                        unsafe_allow_html=True)
+            entered = st.text_input("otp", placeholder="_ _ _ _ _ _",
+                                    max_chars=6, label_visibility="collapsed",
+                                    key="login_otp_input")
+            vc1, vc2 = st.columns([3, 1])
+            with vc1:
+                verify_btn = st.button("Verify & Sign In", type="primary", use_container_width=True)
+            with vc2:
+                if st.button("← Back", use_container_width=True):
+                    st.session_state.otp_step = "email"
+                    st.rerun()
+            if verify_btn:
+                entered = (entered or "").strip()
+                if time.time() > st.session_state.get("otp_expiry", 0):
+                    st.error("OTP expired. Please request a new one.")
+                    st.session_state.otp_step = "email"
+                elif entered == st.session_state.get("otp_code", ""):
+                    st.session_state.logged_in  = True
+                    st.session_state.login_user = st.session_state.otp_email
+                    st.session_state.otp_code   = ""
+                    st.session_state.otp_step   = "email"
+                    st.rerun()
+                else:
+                    st.error("Incorrect code. Please try again.")
+
+
+# ══════════════════════════════════════════════════════════════════
 def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False, show_client_btn=False):  # noqa: ARG001 show_client_btn kept for compat
     docs, links, wa, pages = kb_stats()
     total = docs + links + wa + pages
@@ -1937,6 +2069,11 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
         if _LOGO_URI else
         '<div class="dot">K</div>'
     )
+    login_user = st.session_state.get("login_user", "")
+    user_badge = (f'<span style="font-size:.72rem;color:#A78BFA;background:rgba(99,102,241,.12);'
+                  f'border:1px solid rgba(99,102,241,.2);border-radius:20px;padding:3px 10px;'
+                  f'margin-right:8px">👤 {login_user}</span>'
+                  if login_user else "")
     st.markdown(f"""
     <div class="topnav">
       <div class="topnav-brand">
@@ -1945,6 +2082,7 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
         <span class="badge">AI Support Intelligence</span>
       </div>
       <div class="topnav-right">
+        {user_badge}
         <span class="topnav-status">
           <span class="live-dot"></span>
           {status_label}
@@ -1956,7 +2094,7 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
     # Streamlit buttons — functional nav row
     nav_spacer = st.container()
     with nav_spacer:
-        c_l, c_faq, c_set = st.columns([5.5, 1.3, 1.3])
+        c_l, c_faq, c_set, c_out = st.columns([4.5, 1.3, 1.3, 1.1])
         if show_back_btn:
             with c_l:
                 if st.button("← Back to Answer Studio", key="back_btn", type="secondary"):
@@ -1984,6 +2122,11 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
                              use_container_width=True):
                     st.session_state.page = "settings"
                     st.rerun()
+        with c_out:
+            if st.button("⏻ Logout", key="logout_btn", use_container_width=True):
+                st.session_state.logged_in  = False
+                st.session_state.login_user = ""
+                st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -5062,11 +5205,13 @@ def render_faq():
 # ══════════════════════════════════════════════════════════════════
 #  ROUTER
 # ══════════════════════════════════════════════════════════════════
-if st.session_state.page == "chat":
+if not st.session_state.get("logged_in"):
+    render_login()
+elif st.session_state.page == "chat":
     render_chat()
 elif st.session_state.page == "settings":
     render_settings()
 elif st.session_state.page == "client_qa":
     render_client_qa()
-elif st.session_state.page == "faq":
+else:
     render_faq()
