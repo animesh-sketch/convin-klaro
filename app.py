@@ -998,19 +998,21 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 .cf-user-bubble {
     align-self:flex-end;
     background:linear-gradient(135deg,#7C3AED 0%,#6D28D9 100%);
-    color:#F5F3FF; font-size:0.84rem; line-height:1.55;
+    color:#FFFFFF !important; font-size:0.84rem; line-height:1.55;
     padding:10px 14px; border-radius:18px 18px 4px 18px;
     max-width:84%; word-break:break-word;
     box-shadow:0 2px 14px rgba(109,40,217,.45);
 }
+.cf-user-bubble * { color:#FFFFFF !important; }
 .cf-ai-bubble {
     align-self:flex-start;
-    background:rgba(18,24,42,0.92); color:#D4D8E2;
+    background:rgba(35,40,60,0.95); color:#FFFFFF !important;
     font-size:0.84rem; line-height:1.65;
     padding:10px 14px; border-radius:18px 18px 18px 4px;
-    max-width:90%; border:1px solid rgba(99,102,241,.13);
+    max-width:90%; border:1px solid rgba(99,102,241,.2);
     word-break:break-word; box-shadow:0 2px 10px rgba(0,0,0,.25);
 }
+.cf-ai-bubble * { color:#FFFFFF !important; }
 .cf-ts {
     font-size:.62rem; color:rgba(156,163,175,.5);
     margin-top:3px; text-align:right; padding-right:2px;
@@ -4625,6 +4627,15 @@ def _render_chat_float():
     box-shadow:0 0 0 3px rgba(99,102,241,.12)!important;
 }
 .st-key-cf_panel_wrap .stTextInput>div>div>input::placeholder{color:#4B5563!important;}
+/* Ensure all text in the panel is visible white */
+.st-key-cf_panel_wrap p,
+.st-key-cf_panel_wrap li,
+.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] p,
+.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] li,
+.st-key-cf_panel_wrap [data-testid="stEmpty"] p,
+.st-key-cf_panel_wrap [data-testid="stEmpty"] li { color:#FFFFFF!important; }
+.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] strong,
+.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] em { color:#FFFFFF!important; }
 /* Form wrapper — remove default form styling */
 .st-key-cf_panel_wrap [data-testid="stForm"]{
     border:none!important;background:transparent!important;
