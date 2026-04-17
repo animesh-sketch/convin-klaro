@@ -4808,86 +4808,120 @@ def render_faq():
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
 
-    # Partition Q&As by prefix
+    # ── Partition Q&As by source ──────────────────────────────────
     wa_specific  = [f for f in faqs if f["category"].startswith("WhatsApp:")]
     wa_generic   = [f for f in faqs if f["category"].startswith("Client Learnings:")]
     generic_faqs = [f for f in faqs if not f["category"].startswith("WhatsApp:")
                     and not f["category"].startswith("Client Learnings:")]
-
-    # Curated FAQ: only product-specific categories, capped per category
     faq_curated: list[dict] = []
     for cat in _CONVIN_FAQ_CATS:
         bucket = [f for f in faqs if f["category"] == cat]
         faq_curated.extend(bucket[:_FAQ_CAP_PER_CAT])
 
-    # ── Main content — always full-width ──────────────────────────
-    with st.container():
+    SOURCE_BUCKETS = {
+        "All":        faqs,
+        "FAQ":        faq_curated,
+        "Q&A":        generic_faqs,
+        "Use Cases":  wa_specific,
+        "More Q&A":   wa_generic,
+    }
+    SOURCE_COUNTS = {k: len(v) for k, v in SOURCE_BUCKETS.items()}
+    all_cats_full = sorted(set(f["category"] for f in faqs))
 
     # ── Hero ──────────────────────────────────────────────────────
+    n_cats = len(set(f["category"] for f in faqs))
+    st.markdown(
+        f'<div class="lp-hero"><div class="lp-hero-inner">'
+        f'<div class="lp-eyebrow"><span class="dot"></span>Convin Sense &nbsp;&middot;&nbsp; Knowledge Base</div>'
+        f'<div class="lp-title">Single-Page <span class="grad">Knowledge Base</span></div>'
+        f'<div class="lp-sub">Search, filter, and explore every Q&amp;A — FAQs, pilot use cases, and client learnings — all in one place.</div>'
+        f'<div class="lp-pills">'
+        f'<span class="lp-pill lp-pill-violet">&#10022; {len(faqs):,} Q&amp;As</span>'
+        f'<span class="lp-pill lp-pill-pink">&#128193; {n_cats} Categories</span>'
+        f'<span class="lp-pill lp-pill-cyan">&#9889; Instant Search</span>'
+        f'<span class="lp-pill lp-pill-green">&#10003; {total} KB Sources</span>'
+        f'<span class="lp-pill lp-pill-amber">&#128172; Chat Ready</span>'
+        f'</div>'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Stat cards ────────────────────────────────────────────────
+    st.markdown(
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 20px">'
+        + "".join(
+            f'<div style="background:#1a1d2e;border:1px solid #2d3158;border-radius:10px;'
+            f'padding:12px 18px;flex:1;min-width:100px;text-align:center">'
+            f'<div style="font-size:1.4rem;font-weight:800;color:#A78BFA">{SOURCE_COUNTS[k]:,}</div>'
+            f'<div style="font-size:0.72rem;color:#9CA3AF;margin-top:3px">{k}</div>'
+            f'</div>'
+            for k in SOURCE_BUCKETS
+        )
+        + "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Search + Filter row ───────────────────────────────────────
+    sc, fc, cc = st.columns([4, 2, 2])
+    with sc:
+        search = st.text_input(
+            "search", placeholder="🔍  Search questions and answers…",
+            label_visibility="collapsed", key="kb_global_search",
+        )
+    with fc:
+        src_choice = st.selectbox(
+            "Source", list(SOURCE_BUCKETS.keys()),
+            label_visibility="collapsed", key="kb_src_select",
+        )
+    with cc:
+        short_cats = ["All Categories"] + [
+            c.replace("WhatsApp: ", "").replace("Client Learnings: ", "")
+            for c in all_cats_full
+        ]
+        cat_choice = st.selectbox(
+            "Category", short_cats,
+            label_visibility="collapsed", key="kb_cat_select",
+        )
+
+    # ── Build filtered subset ─────────────────────────────────────
+    active = list(SOURCE_BUCKETS[src_choice])
+
+    if cat_choice != "All Categories":
+        active = [
+            f for f in active
+            if f["category"].replace("WhatsApp: ", "").replace("Client Learnings: ", "") == cat_choice
+        ]
+
+    slc = search.lower().strip() if search else ""
+    if slc:
+        active = [
+            f for f in active
+            if slc in f.get("question", "").lower() or slc in f.get("answer", "").lower()
+        ]
+
+    # ── Result count banner ───────────────────────────────────────
+    if search or cat_choice != "All Categories":
         st.markdown(
-            f'<div class="lp-hero"><div class="lp-hero-inner">'
-            f'<div class="lp-eyebrow"><span class="dot"></span>Convin Sense &nbsp;&middot;&nbsp; AI Knowledge Platform</div>'
-            f'<div class="lp-title">Your Intelligent <span class="grad">Answer Studio</span></div>'
-            f'<div class="lp-sub">Auto-generated answers from your entire knowledge base — docs, web pages, and conversations — always up to date.</div>'
-            f'<div class="lp-pills">'
-            f'<span class="lp-pill lp-pill-violet">&#10022; {len(faqs):,} Q&amp;As</span>'
-            f'<span class="lp-pill lp-pill-pink">&#129302; AI-Powered</span>'
-            f'<span class="lp-pill lp-pill-cyan">&#9889; Instant Search</span>'
-            f'<span class="lp-pill lp-pill-green">&#10003; {total} KB Sources</span>'
-            f'<span class="lp-pill lp-pill-amber">&#128172; Chat Ready</span>'
-            f'</div>'
-            f'<div class="lp-stats">'
-            f'<div class="lp-stat lp-stat-v"><span class="n">{len(faq_curated)}</span><div class="l">Curated FAQ</div></div>'
-            f'<div class="lp-stat lp-stat-p"><span class="n">{len(generic_faqs)}</span><div class="l">Q&amp;A Pairs</div></div>'
-            f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_specific)}</span><div class="l">Use Cases</div></div>'
-            f'<div class="lp-stat lp-stat-g"><span class="n">{len(wa_generic)}</span><div class="l">More Q&amp;A</div></div>'
-            f'</div>'
-            f'</div></div>',
+            f'<div style="font-size:0.82rem;color:#A78BFA;margin:4px 0 12px">'
+            f'&#128269; <b>{len(active):,}</b> results'
+            + (f' for &ldquo;{search}&rdquo;' if search else "")
+            + (f' in <b>{cat_choice}</b>' if cat_choice != "All Categories" else "")
+            + f' &nbsp;·&nbsp; <b>{src_choice}</b></div>',
             unsafe_allow_html=True,
         )
 
-        # ── 5-Tab layout ──────────────────────────────────────────────
-        tab_faq, tab_generic, tab_use, tab_more, tab_flow = st.tabs([
-            f"📋  FAQ  ({len(faq_curated)})",
-            f"💡  Q&A  ({len(generic_faqs)})",
-            f"📚  Use Cases  ({len(wa_specific)})",
-            f"🔍  More Q&A  ({len(wa_generic)})",
-            f"🗺️  Process Flow",
-        ])
+    # ── Q&A list ──────────────────────────────────────────────────
+    _render_category_dashboard(
+        active, "kb",
+        no_content_msg="No Q&As match your search or filter.",
+    )
 
-        # ── Tab 1: Curated Convin Sense FAQ ───────────────────────────
-        with tab_faq:
-            _render_category_dashboard(
-                faq_curated, "faq",
-                no_content_msg="No Convin Sense FAQs found",
-            )
+    # ── Process Flow (collapsible) ────────────────────────────────
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    with st.expander("🗺️  Process Flow — End-to-End Campaign Flowchart", expanded=False):
+        _render_flowchart_tab()
 
-        # ── Tab 2: Full generic Q&A (docs + web) ─────────────────────
-        with tab_generic:
-            _render_category_dashboard(
-                generic_faqs, "generic",
-                no_content_msg="No Q&As yet — add docs or web links in Settings",
-            )
-
-        # ── Tab 3: Use Cases (WhatsApp pilot chats — client context) ──
-        with tab_use:
-            _render_category_dashboard(
-                wa_specific, "use",
-                no_content_msg="No Use Cases yet — upload WhatsApp chats in Settings → Client Use Cases",
-            )
-
-        # ── Tab 4: More Q&A (generic learnings — no client names) ─────
-        with tab_more:
-            _render_category_dashboard(
-                wa_generic, "more",
-                no_content_msg="No Q&As yet — click Generate Generic Q&As in Settings → Client Use Cases",
-            )
-
-        # ── Tab 5: Process Flowchart ──────────────────────────────────
-        with tab_flow:
-            _render_flowchart_tab()
-
-    # ── Action bar (bottom) ───────────────────────────────────────
+    # ── Action bar ────────────────────────────────────────────────
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
     ab1, ab2 = st.columns([3, 2])
     with ab1:
@@ -4911,8 +4945,7 @@ def render_faq():
         passes  = sum(1 for x in [docs_n, links_n, wa_n] if x > 0)
         status_ph.markdown(
             f"<span style='color:#A78BFA;font-size:0.85rem'>"
-            f"🤖 Running {passes} extraction pass(es) across all sources — "
-            f"building your Answer Studio…</span>",
+            f"🤖 Running {passes} extraction pass(es) — building your Knowledge Base…</span>",
             unsafe_allow_html=True,
         )
         prog_ph.progress(0.05)
@@ -4931,9 +4964,9 @@ def render_faq():
                 st.session_state.kb_faqs = new_faqs
                 save_kb()
                 prog_ph.empty()
-                n_cats = len(set(f["category"] for f in new_faqs))
+                n_cats2 = len(set(f["category"] for f in new_faqs))
                 status_ph.success(
-                    f"✅ {len(new_faqs)} answers generated across {n_cats} categories — saved to Answer Studio!"
+                    f"✅ {len(new_faqs)} answers generated across {n_cats2} categories — Knowledge Base updated!"
                 )
                 st.rerun()
             else:
@@ -4943,7 +4976,7 @@ def render_faq():
             prog_ph.empty()
             status_ph.error(f"Error: {e}")
 
-    # ── Floating chat widget (always rendered, positioned via JS) ──
+    # ── Floating chat widget ──────────────────────────────────────
     _render_chat_float()
 
 
