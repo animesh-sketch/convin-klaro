@@ -2323,6 +2323,40 @@ def render_settings():
                             unsafe_allow_html=True,
                         )
 
+        # ── Generate generic Q&As ─────────────────────────────────
+        st.markdown("---")
+        cl_qas_existing = [f for f in st.session_state.get("kb_faqs", [])
+                           if f.get("category", "").startswith("Client Learnings:")]
+        cg1, cg2 = st.columns([2, 3])
+        with cg1:
+            wa_gen_btn = st.button(
+                "🤖 Generate Generic Q&As", key="wa_gen_qas_btn",
+                type="primary", use_container_width=True,
+                disabled=not st.session_state.get("kb_whatsapp"),
+            )
+        with cg2:
+            st.markdown(
+                f"<div style='padding-top:8px;font-size:.78rem;color:#6B7280'>"
+                f"Extracts maximum generic Q&As — patterns across all clients, no client names. "
+                f"Currently <b style='color:#A78BFA'>{len(cl_qas_existing)}</b> saved.</div>",
+                unsafe_allow_html=True,
+            )
+
+        if wa_gen_btn:
+            wa_prog = st.progress(0.0, "Starting…")
+            new_qas = _generate_wa_generic_qas(lambda p, m: wa_prog.progress(p, m))
+            if new_qas:
+                other_faqs = [f for f in st.session_state.get("kb_faqs", [])
+                              if not f.get("category", "").startswith("Client Learnings:")]
+                st.session_state.kb_faqs = other_faqs + new_qas
+                save_kb()
+                wa_prog.progress(1.0, f"✅ Done")
+                st.success(f"✅ Generated **{len(new_qas)}** generic Q&As from client use cases.")
+                st.rerun()
+            else:
+                wa_prog.empty()
+                st.warning("Nothing extracted — upload chat files above first.")
+
     # ── Real Life Q&A ──────────────────────────────────────────────
     with t3b:
         _render_rlqa_settings()
@@ -3146,6 +3180,121 @@ def _render_rlqa_settings():
     if st.button("📂 Go to Real Life Q&A →", key="rlqa_goto_btn", type="primary"):
         st.session_state.page = "faq"
         st.rerun()
+
+
+_WA_GENERIC_CATS = [
+    "Client Learnings: Bot Performance",
+    "Client Learnings: Connectivity & Metrics",
+    "Client Learnings: Onboarding & Setup",
+    "Client Learnings: Common Objections & Responses",
+    "Client Learnings: Sales Process",
+    "Client Learnings: Product Issues & Fixes",
+    "Client Learnings: Feature Requests",
+    "Client Learnings: Best Practices",
+    "Client Learnings: ROI & Business Case",
+    "Client Learnings: WhatsApp & Multi-Channel",
+    "Client Learnings: Lead & Data Quality",
+    "Client Learnings: Human Handoff & Callbacks",
+]
+
+
+def _generate_wa_generic_qas(progress_cb=None) -> list[dict]:
+    """Extract max generic Q&As from all kb_whatsapp — no client-specific names/references."""
+    ai_client = get_client()
+    all_qas: list[dict] = []
+    chats = st.session_state.get("kb_whatsapp", [])
+    if not chats:
+        return []
+
+    cats_str = "\n".join(f"  - {c}" for c in _WA_GENERIC_CATS)
+    CHUNK = 45_000
+
+    valid_chats = [w for w in chats
+                   if w.get("content") and not w.get("meta", {}).get("is_attachment")]
+    total_chunks = sum(
+        max(1, (len(w["content"]) + CHUNK - 1) // CHUNK) for w in valid_chats
+    )
+    done = 0
+
+    for w in valid_chats:
+        content = w["content"].strip()
+        chunks = [content[i:i+CHUNK] for i in range(0, len(content), CHUNK)]
+
+        for ci, chunk in enumerate(chunks):
+            done += 1
+            if progress_cb:
+                pct = 0.04 + (done / max(total_chunks, 1)) * 0.88
+                progress_cb(pct, f"📦 {w['name']} · chunk {ci+1}/{len(chunks)}…")
+
+            prompt = (
+                "You are extracting a GENERIC knowledge base from real WhatsApp conversations "
+                "between Convin's internal teams about Convin Sense (AI voice bot) pilot deployments.\n\n"
+                "CRITICAL RULES:\n"
+                "• DO NOT mention specific client or company names — anonymise and generalise everything.\n"
+                "• Generalise patterns across clients (e.g. 'clients typically achieve X%' not 'ABC achieved X%').\n"
+                "• Write questions from the perspective of a support agent, sales rep, or new employee.\n"
+                "• Answers: 3–6 sentences, include specific numbers/percentages where available, be actionable.\n"
+                "• Extract the MAXIMUM possible Q&A pairs — every fact, number, process, "
+                "decision, objection, bug, fix → one Q&A.\n"
+                "• Skip only: pure greetings, 'ok'/'noted', scheduling noise, 'media omitted', trivial ack.\n\n"
+                "WHAT TO EXTRACT (be exhaustive):\n"
+                "• Connectivity rates, qualification %, conversion rates seen across deployments\n"
+                "• Bot configuration patterns — voice, persona, system prompt, DND hours, KB setup\n"
+                "• Common client objections and how they were resolved\n"
+                "• Onboarding steps, timelines, pre-campaign checklists\n"
+                "• Bugs, hallucinations, misclassifications and their fixes\n"
+                "• WhatsApp + voice campaign best practices and sequencing\n"
+                "• Feature requests that reflect real customer pain points\n"
+                "• ROI data points, CPA, business case stats used with clients\n"
+                "• NBA (Next Best Action) loops, retry logic, DND handling\n"
+                "• Lead CSV format requirements, data quality standards\n"
+                "• Human handoff TAT, agent callback processes\n"
+                "• UAT process, test lead counts, go-live criteria\n\n"
+                f"CATEGORIES (assign exactly one per Q&A):\n{cats_str}\n\n"
+                "Return ONLY a raw JSON array — no markdown fences, no preamble:\n"
+                '[\n  {"category":"...", "question":"...", "answer":"..."},\n  ...\n]\n\n'
+                "CHAT:\n" + chunk
+            )
+
+            try:
+                r = ai_client.messages.create(
+                    model="claude-sonnet-4-6",
+                    max_tokens=14000,
+                    messages=[{
+                        "role": "user",
+                        "content": [{"type": "text", "text": prompt,
+                                     "cache_control": {"type": "ephemeral"}}],
+                    }],
+                    extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+                )
+                raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
+                raw = re.sub(r"\n?```$", "", raw)
+                items = json.loads(raw)
+                for item in items:
+                    if isinstance(item, dict) and item.get("question"):
+                        all_qas.append({
+                            "category": str(item.get("category", _WA_GENERIC_CATS[0])),
+                            "question": str(item.get("question", "")),
+                            "answer":   str(item.get("answer", "")),
+                        })
+            except Exception:
+                pass
+
+    if progress_cb:
+        progress_cb(0.95, "✨ Deduplicating…")
+
+    seen: set[str] = set()
+    deduped = []
+    for qa in all_qas:
+        key = qa["question"].lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(qa)
+
+    if progress_cb:
+        progress_cb(1.0, f"✅ {len(deduped)} Q&As extracted")
+
+    return deduped
 
 
 def _generate_rlqa(progress_cb=None) -> list[dict]:
@@ -4514,9 +4663,11 @@ def render_faq():
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
 
-    # Partition into WhatsApp, generic, and curated Convin FAQ
-    wa_faqs      = [f for f in faqs if f["category"].startswith("WhatsApp:")]
-    generic_faqs = [f for f in faqs if not f["category"].startswith("WhatsApp:")]
+    # Partition into Client Use Cases (WhatsApp: + Client Learnings:), generic, and curated
+    wa_faqs      = [f for f in faqs if f["category"].startswith("WhatsApp:")
+                    or f["category"].startswith("Client Learnings:")]
+    generic_faqs = [f for f in faqs if not f["category"].startswith("WhatsApp:")
+                    and not f["category"].startswith("Client Learnings:")]
 
     # Curated FAQ: only product-specific categories, capped per category
     faq_curated: list[dict] = []
@@ -4581,11 +4732,11 @@ def render_faq():
                 no_content_msg="No Q&As yet — add docs or web links in Settings",
             )
 
-        # ── Tab 3: WhatsApp Q&As ──────────────────────────────────────
+        # ── Tab 3: Client Use Cases ───────────────────────────────────
         with tab_wa:
             _render_category_dashboard(
                 wa_faqs, "wa",
-                no_content_msg="No WhatsApp Q&As yet — upload a chat export in Settings",
+                no_content_msg="No Q&As yet — upload chats in Settings → Client Use Cases, then click Generate Generic Q&As",
             )
 
         # ── Tab 4: Real Life Q&A ──────────────────────────────────────
