@@ -28,7 +28,8 @@ _LOGO_URI = _b64_img(os.path.join(os.path.dirname(os.path.abspath(__file__)), "c
 # ══════════════════════════════════════════════════════════════════
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_FILE = os.path.join(APP_DIR, "kb_store.json")
-KB_KEYS = ("kb_documents", "kb_links", "kb_whatsapp", "kb_crawled", "kb_faqs", "kb_client_chats")
+KB_KEYS = ("kb_documents", "kb_links", "kb_whatsapp", "kb_crawled", "kb_faqs",
+           "kb_client_chats", "kb_rlqa_files", "kb_rlqa_qas")
 MAX_CTX  = 580_000   # chars — safely under Claude's 200k-token window
 
 st.set_page_config(
@@ -1122,6 +1123,7 @@ _DEFAULTS = {
     "kb_client_qas":      {},
     "cqa_selected":       "",
     "cqa_edit_id":        "",
+    "rlqa_edit_id":       "",
     **{k: [] for k in KB_KEYS},
 }
 for k, v in _DEFAULTS.items():
@@ -1398,6 +1400,63 @@ def parse_wa_meta(content: str) -> dict:
         "last_date": messages[-1]["date"],
         "date_range": f"{messages[0]['date']} → {messages[-1]['date']}",
     }
+
+
+def parse_wa_html(html_content: str) -> tuple[str, dict]:
+    """Parse a WhatsApp HTML export (from phone share as HTML).
+    Returns (parsed_text, meta) in same format as parse_wa + parse_wa_meta."""
+    try:
+        from bs4 import BeautifulSoup as _BS
+    except ImportError:
+        return "", {"valid": False, "total": 0, "participants": [], "date_range": ""}
+
+    soup = _BS(html_content, "html.parser")
+    messages = []
+    current_date = ""
+
+    for el in soup.select(".date-divider, .msg-row"):
+        classes = el.get("class", [])
+        if "date-divider" in classes:
+            span = el.find("span")
+            if span:
+                current_date = span.get_text(strip=True)
+        elif "msg-row" in classes:
+            sender_el = el.find(class_="sender")
+            time_el   = el.find(class_="time")
+            text_el   = el.find(class_="text")
+            if not (sender_el and text_el):
+                continue
+            sender = sender_el.get_text(strip=True)
+            time_  = time_el.get_text(strip=True) if time_el else ""
+            text   = text_el.get_text(" ", strip=True)
+            if not text or len(text) < 3 or text in _WA_SKIP:
+                continue
+            messages.append({"date": current_date, "time": time_, "sender": sender, "text": text})
+
+    if not messages:
+        # Fallback: try generic HTML text extraction + parse as WA txt
+        plain = soup.get_text("\n")
+        parsed = parse_wa(plain)
+        meta = parse_wa_meta(parsed)
+        return parsed, meta
+
+    lines = [f"[{m['date']} {m['time']}] {m['sender']}: {m['text']}" for m in messages]
+    content = "\n".join(lines)
+
+    participants = list(dict.fromkeys(m["sender"] for m in messages))
+    counts = {s: sum(1 for m in messages if m["sender"] == s) for s in participants}
+    meta = {
+        "valid": True,
+        "total": len(messages),
+        "participants": participants,
+        "msg_counts": counts,
+        "first_date": messages[0]["date"] if messages else "",
+        "last_date":  messages[-1]["date"] if messages else "",
+        "date_range": f"{messages[0]['date']} → {messages[-1]['date']}" if messages else "",
+        "file_type": "whatsapp_html",
+    }
+    return content, meta
+
 
 def crawl_site(root, max_p, status_ph, prog_ph):
     try:
@@ -2035,18 +2094,21 @@ def render_settings():
     """, unsafe_allow_html=True)
 
     # ── Stats row ──────────────────────────────────────────────────
-    s1, s2, s3, s4, s5 = st.columns(5)
+    rlqa_n = len(st.session_state.get("kb_rlqa_files", []))
+    s1, s2, s3, s3b, s4, s5 = st.columns(6)
     s1.metric("Documents", docs)
     s2.metric("Web pages", links)
     s3.metric("WA chats",  wa)
+    s3b.metric("Real Life", rlqa_n)
     s4.metric("Crawled",   pages)
-    s5.metric("Total",     docs + links + wa + pages)
+    s5.metric("Total",     docs + links + wa + rlqa_n + pages)
 
     st.markdown("---")
 
     # ── Tabs ────────────────────────────────────────────────────────
-    t1, t2, t3, t4, t5, t6 = st.tabs([
-        "📄 Documents", "🌐 Web Links", "💬 WhatsApp", "🕷️ Crawl Site", "⚙️ Preferences", "🎯 Client Engine"
+    t1, t2, t3, t3b, t4, t5, t6 = st.tabs([
+        "📄 Documents", "🌐 Web Links", "💬 WhatsApp", "📂 Real Life Q&A",
+        "🕷️ Crawl Site", "⚙️ Preferences", "🎯 Client Engine",
     ])
 
     # ── Documents ──────────────────────────────────────────────────
@@ -2253,6 +2315,10 @@ def render_settings():
                             + "</div>",
                             unsafe_allow_html=True,
                         )
+
+    # ── Real Life Q&A ──────────────────────────────────────────────
+    with t3b:
+        _render_rlqa_settings()
 
     # ── Crawl Site ─────────────────────────────────────────────────
     with t4:
@@ -2850,6 +2916,556 @@ flowchart TD
 def _render_flowchart_tab():
     """Render the classy dark-themed Convin Sense process flowchart."""
     _components.html(_FLOWCHART_HTML, height=3400, scrolling=True)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  REAL LIFE Q&A — Settings upload UI + generator + display
+# ══════════════════════════════════════════════════════════════════
+
+_RLQA_ALL_TYPES = [
+    "txt", "zip", "html", "htm",
+    "pdf", "docx", "doc",
+    "xlsx", "xls", "csv",
+    "pptx", "ppt",
+    "json",
+    "png", "jpg", "jpeg", "webp", "gif",
+    "mp4", "mp3", "ogg", "opus", "aac", "wav",
+    "rtf", "epub", "eml", "ipynb",
+    "py", "js", "ts", "md",
+]
+
+_RLQA_CAT_ICONS = {
+    "Product Features":           "⚙️",
+    "Pricing & Plans":            "💰",
+    "Onboarding & Setup":         "🚀",
+    "Integrations":               "🔗",
+    "Technical Support":          "🛠️",
+    "Use Cases":                  "🎯",
+    "Billing & Payments":         "💳",
+    "Security & Compliance":      "🛡️",
+    "AI Capabilities":            "🤖",
+    "Reporting & Analytics":      "📊",
+    "Sales & Demos":              "💼",
+    "FAQs & General":             "❓",
+    "Convin Sense Pilot":         "📋",
+    "Bot Configuration":          "⚙️",
+    "Client Objections":          "💬",
+    "Performance Metrics":        "📈",
+    "Troubleshooting":            "🔧",
+    "Data & Privacy":             "🔒",
+    "WhatsApp Channel":           "💬",
+    "Voice Call Engine":          "📞",
+    "NBA & Follow-up":            "🔁",
+    "Human Handoff":              "👤",
+    "ROI & Business Value":       "📊",
+    "Other":                      "📌",
+}
+
+
+def _parse_rlqa_file(f) -> tuple[str, dict]:
+    """Parse any uploaded file → (content_text, meta). Returns ('', {}) on failure."""
+    fname = f.name.lower()
+    meta = {"valid": True, "total": 0, "participants": [], "msg_counts": {},
+            "first_date": "", "last_date": "", "date_range": "", "file_type": "document"}
+
+    # ── WhatsApp HTML export ───────────────────────────────────
+    if fname.endswith(".html") or fname.endswith(".htm"):
+        raw_bytes = f.read()
+        html_str = raw_bytes.decode("utf-8", "ignore")
+        content, html_meta = parse_wa_html(html_str)
+        if html_meta.get("valid") and html_meta.get("total", 0) >= 3:
+            return content, html_meta
+        # Not a WA HTML — parse as generic HTML doc
+        try:
+            from bs4 import BeautifulSoup as _BS
+            content = _BS(html_str, "html.parser").get_text("\n")
+            meta["file_type"] = "document"
+            return content, meta
+        except Exception:
+            return html_str, meta
+
+    # ── WhatsApp zip ───────────────────────────────────────────
+    if fname.endswith(".zip"):
+        try:
+            raw_bytes = f.read()
+            with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
+                txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
+                html_files = [n for n in zf.namelist()
+                              if n.endswith(".html") or n.endswith(".htm")]
+                if txt_files:
+                    raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
+                    content = parse_wa(raw)
+                    m = parse_wa_meta(content)
+                    if m["valid"] and m["total"] >= 3:
+                        m["file_type"] = "whatsapp"
+                        return content, m
+                if html_files:
+                    html_str = zf.read(html_files[0]).decode("utf-8", "ignore")
+                    content, m = parse_wa_html(html_str)
+                    if m["valid"] and m["total"] >= 3:
+                        return content, m
+                # fallback: any parseable doc inside zip
+                for zname in zf.namelist():
+                    if any(zname.lower().endswith(e) for e in
+                           [".pdf", ".docx", ".csv", ".json", ".txt"]):
+                        inner = io.BytesIO(zf.read(zname))
+                        inner.name = zname
+                        try:
+                            content = parse_file(inner)
+                            return content, meta
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        return "", {}
+
+    # ── Plain txt — try WhatsApp first ────────────────────────
+    if fname.endswith(".txt"):
+        raw = f.read().decode("utf-8", "ignore")
+        content = parse_wa(raw)
+        m = parse_wa_meta(content)
+        if m["valid"] and m["total"] >= 5:
+            m["file_type"] = "whatsapp"
+            return content, m
+        # Plain text document
+        meta["file_type"] = "document"
+        return raw, meta
+
+    # ── All other formats via parse_file ──────────────────────
+    try:
+        content = parse_file(f)
+        meta["file_type"] = "document"
+        return content, meta
+    except Exception:
+        return "", {}
+
+
+def _render_rlqa_settings():
+    """Settings UI for Real Life Q&A uploads (any format)."""
+    st.markdown("""
+    <div style='background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.20);
+    border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:0.83rem;color:#A5F3FC'>
+    📂 <b>Real Life Q&amp;A</b> — Upload any real-world files to generate Convin Sense-focused Q&amp;A pairs.
+    Supports <b>WhatsApp HTML/TXT/ZIP exports</b>, PDF, DOCX, XLSX, PPTX, HTML, CSV, JSON, images, audio, code, notebooks.
+    Q&amp;As are generic (no client context) and appear in the Answer Studio's Real Life Q&amp;A tab.
+    </div>
+    """, unsafe_allow_html=True)
+
+    rlqa_files = st.session_state.get("kb_rlqa_files", [])
+    existing_names = {f["name"] for f in rlqa_files}
+
+    uploads = st.file_uploader(
+        "Upload files (any format)",
+        type=_RLQA_ALL_TYPES,
+        key="rlqa_uploader",
+        label_visibility="visible",
+        accept_multiple_files=True,
+    )
+
+    if uploads:
+        new_ups = [u for u in uploads if u.name not in existing_names]
+        already = [u.name for u in uploads if u.name in existing_names]
+        if already:
+            st.info(f"Already added: {', '.join(already)}")
+
+        if new_ups:
+            if st.button("➕ Add Files", key="rlqa_add_btn", type="primary"):
+                added, skipped = 0, []
+                for up in new_ups:
+                    content, meta = _parse_rlqa_file(up)
+                    if not content or len(content.strip()) < 20:
+                        skipped.append(f"{up.name} (no text extracted)")
+                        continue
+                    ftype = meta.get("file_type", "document")
+                    total_msgs = meta.get("total", 0)
+                    type_badge = (
+                        f"WhatsApp HTML ({total_msgs:,} msgs)" if ftype == "whatsapp_html"
+                        else f"WhatsApp TXT ({total_msgs:,} msgs)" if ftype == "whatsapp"
+                        else "Document"
+                    )
+                    st.session_state.kb_rlqa_files.append({
+                        "name":      up.name,
+                        "content":   content,
+                        "added_at":  datetime.now().isoformat(),
+                        "size":      len(content),
+                        "meta":      meta,
+                        "type_badge": type_badge,
+                    })
+                    added += 1
+                if added:
+                    save_kb()
+                    st.success(f"✅ {added} file(s) added to Real Life Q&A.")
+                    st.rerun()
+                if skipped:
+                    st.warning(f"⚠️ Skipped: {', '.join(skipped)}")
+
+    # ── File list ────────────────────────────────────────────────
+    rlqa_files = st.session_state.get("kb_rlqa_files", [])
+    if not rlqa_files:
+        st.markdown(
+            "<div style='padding:24px;text-align:center;color:#475569;font-size:0.85rem'>"
+            "No files uploaded yet.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(
+        f"<div style='font-weight:600;color:#A5F3FC;margin:16px 0 10px;font-size:0.82rem'>"
+        f"UPLOADED FILES — {len(rlqa_files)}</div>",
+        unsafe_allow_html=True,
+    )
+    for i, rf in enumerate(rlqa_files):
+        fa, fb = st.columns([6, 1])
+        with fa:
+            badge_color = "#10B981" if "WhatsApp" in rf.get("type_badge","") else "#6366F1"
+            st.markdown(
+                f'<div class="file-row" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px 14px">'
+                f'<div style="display:flex;align-items:center;gap:8px">'
+                f'<span class="file-row-icon">📂</span>'
+                f'<span class="file-row-name">{rf["name"]}</span>'
+                f'<span class="file-row-meta">{rf["size"]:,} chars · {ts_label(rf["added_at"])}</span>'
+                f'</div>'
+                f'<div style="font-size:0.7rem;color:{badge_color};padding-left:24px">'
+                f'{rf.get("type_badge","Document")}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with fb:
+            if st.button("Remove", key=f"rm_rlqa_{i}", type="secondary"):
+                st.session_state.kb_rlqa_files.pop(i)
+                save_kb(); st.rerun()
+
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+    if st.button("📂 Go to Real Life Q&A →", key="rlqa_goto_btn", type="primary"):
+        st.session_state.page = "faq"
+        st.rerun()
+
+
+def _generate_rlqa(progress_cb=None) -> list[dict]:
+    """Generate generic Convin Sense Q&As from all Real Life Q&A files."""
+    ai_client = get_client()
+    all_qas: list[dict] = []
+    files = st.session_state.get("kb_rlqa_files", [])
+    if not files:
+        return []
+
+    for fi, rf in enumerate(files):
+        content = rf.get("content", "").strip()
+        if not content:
+            continue
+        meta = rf.get("meta", {})
+        ftype = meta.get("file_type", "document")
+        plist = ", ".join(meta.get("participants", [])[:6]) if meta.get("participants") else "—"
+        drange = meta.get("date_range", "")
+        total_m = meta.get("total", 0)
+
+        if progress_cb:
+            progress_cb(
+                0.05 + (fi / len(files)) * 0.85,
+                f"📂 Processing {rf['name']} ({fi+1}/{len(files)})…",
+            )
+
+        if ftype in ("whatsapp", "whatsapp_html"):
+            source_header = (
+                f"WhatsApp {'HTML' if ftype == 'whatsapp_html' else 'TXT'} export: {rf['name']}\n"
+                f"Participants: {plist}\n"
+                f"Date range: {drange} | Messages: {total_m}\n\n"
+                "These are REAL conversations about Convin Sense from internal pilot/sales/support teams.\n\n"
+                "EXTRACT:\n"
+                "• Product Q&As — what is X, how does Y work, what's the difference between A and B\n"
+                "• Pilot metrics & outcomes — connectivity%, qualification%, conversion rates\n"
+                "• Common objections and the best responses given\n"
+                "• Setup, configuration, and onboarding decisions\n"
+                "• Bugs and their resolutions\n"
+                "• Feature requests that reflect customer needs\n"
+                "• ROI and business value discussions\n"
+            )
+        else:
+            source_header = (
+                f"Document: {rf['name']}\n\n"
+                "EXTRACT every fact, process, feature, policy, and topic as a Q&A pair.\n"
+                "Turn every sentence into: 'What is X?' / 'How does Y work?' / 'Why does Z matter?'\n"
+                "Be exhaustive — cover everything in the document.\n"
+            )
+
+        cats_str = ", ".join(_RLQA_CAT_ICONS.keys())
+        prompt = (
+            "You are building a Convin Sense knowledge base from real-world source material.\n\n"
+            + source_header
+            + "\nRULES:\n"
+            "• Write questions from a support agent or customer perspective.\n"
+            "• Answers: 2–5 sentences, clear and support-friendly. No fluff.\n"
+            "• Skip: greetings, 'ok'/'noted', scheduling noise, media omitted.\n"
+            "• Deduplicate: keep the best version if the same topic appears multiple times.\n"
+            f"• Assign ONE category per Q&A from: {cats_str}.\n\n"
+            "Return ONLY a raw JSON array:\n"
+            '[\n  {"category":"Product Features","question":"Q?","answer":"A."},\n  ...\n]\n\n'
+            "Be exhaustive — extract EVERY piece of knowledge.\n\n"
+            f"{'CHAT' if ftype in ('whatsapp','whatsapp_html') else 'DOCUMENT'}:\n"
+            + content[:MAX_CTX]
+        )
+
+        try:
+            r = ai_client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=14000,
+                messages=[{
+                    "role": "user",
+                    "content": [{"type": "text", "text": prompt,
+                                 "cache_control": {"type": "ephemeral"}}],
+                }],
+                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+            )
+            raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
+            raw = re.sub(r"\n?```$", "", raw)
+            items = json.loads(raw)
+            for item in items:
+                if isinstance(item, dict) and item.get("question"):
+                    all_qas.append({
+                        "id":           str(uuid.uuid4()),
+                        "category":     str(item.get("category", "Other")),
+                        "question":     str(item.get("question", "")),
+                        "answer":       str(item.get("answer", "")),
+                        "edited":       False,
+                        "source_file":  rf["name"],
+                        "generated_at": datetime.now().isoformat(),
+                    })
+        except Exception:
+            pass
+
+    if progress_cb:
+        progress_cb(0.92, "✨ Deduplicating…")
+
+    seen: set[str] = set()
+    deduped = []
+    for qa in all_qas:
+        key = qa["question"].lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(qa)
+
+    if progress_cb:
+        progress_cb(1.0, "✅ Done")
+
+    return deduped
+
+
+def _render_rlqa_tab():
+    """Answer Studio tab: Real Life Q&A — search, filter, edit, generate."""
+    rlqa_qas  = st.session_state.get("kb_rlqa_qas", [])
+    rlqa_files = st.session_state.get("kb_rlqa_files", [])
+
+    if not rlqa_files and not rlqa_qas:
+        st.markdown("""
+        <div style='text-align:center;padding:48px 20px;color:#374151'>
+          <div style='font-size:3rem;margin-bottom:14px'>📂</div>
+          <div style='font-size:1.05rem;font-weight:700;color:#4B5563;margin-bottom:8px'>
+            No files uploaded yet
+          </div>
+          <div style='font-size:0.83rem'>
+            Go to Settings → Real Life Q&amp;A to upload WhatsApp exports, PDFs, and more.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("⚙ Open Settings", key="rlqa_open_settings", type="primary"):
+            st.session_state.page = "settings"
+            st.rerun()
+        return
+
+    # ── Stats ─────────────────────────────────────────────────────
+    n_qas    = len(rlqa_qas)
+    n_cats   = len(set(q["category"] for q in rlqa_qas))
+    n_files  = len(rlqa_files)
+    n_edited = len([q for q in rlqa_qas if q.get("edited")])
+    last_gen = rlqa_qas[0].get("generated_at", "") if rlqa_qas else ""
+
+    rc1, rc2, rc3, rc4 = st.columns(4)
+    for col, val, lbl in [
+        (rc1, str(n_qas), "Q&As Generated"),
+        (rc2, str(n_cats), "Categories"),
+        (rc3, str(n_files), "Source Files"),
+        (rc4, ts_label(last_gen) if last_gen else "Never", "Last Generated"),
+    ]:
+        col.markdown(
+            f'<div class="cqa-stat-card"><div class="cqa-stat-val" '
+            f'style="font-size:{"1.5rem" if len(val)<=5 else "0.95rem"}">{val}</div>'
+            f'<div class="cqa-stat-lbl">{lbl}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+
+    # ── Action buttons ────────────────────────────────────────────
+    ra1, ra2, ra3, ra4 = st.columns([2.5, 1.5, 1.5, 1.5])
+    with ra1:
+        rlqa_gen_btn = st.button(
+            "✨ Generate Q&As" if not rlqa_qas else "🔄 Regenerate Q&As",
+            key="rlqa_gen_btn", type="primary", use_container_width=True,
+            disabled=(not rlqa_files),
+        )
+    with ra2:
+        if rlqa_qas:
+            st.download_button(
+                "⬇️ JSON", use_container_width=True,
+                data=json.dumps(rlqa_qas, indent=2, ensure_ascii=False),
+                file_name="reallife_qa.json", mime="application/json",
+                key="rlqa_dl_json",
+            )
+    with ra3:
+        if rlqa_qas:
+            lines = []
+            for cat in sorted(set(q["category"] for q in rlqa_qas)):
+                lines += [f"\n{'='*52}", f"  {cat.upper()}", f"{'='*52}\n"]
+                for idx, q in enumerate([x for x in rlqa_qas if x["category"] == cat], 1):
+                    lines += [f"Q{idx}. {q['question']}", f"A:  {q['answer']}\n"]
+            st.download_button(
+                "⬇️ TXT", use_container_width=True,
+                data="\n".join(lines), file_name="reallife_qa.txt", mime="text/plain",
+                key="rlqa_dl_txt",
+            )
+    with ra4:
+        if rlqa_qas and st.button("🗑️ Clear", key="rlqa_clear_btn",
+                                   use_container_width=True, type="secondary"):
+            st.session_state.kb_rlqa_qas = []
+            save_kb(); st.rerun()
+
+    # ── Generate handler ──────────────────────────────────────────
+    if rlqa_gen_btn:
+        rlqa_prog = st.empty()
+        rlqa_status = st.empty()
+        rlqa_prog.progress(0.05)
+        rlqa_status.markdown(
+            "<span style='color:#A5F3FC;font-size:0.85rem'>🤖 Generating Real Life Q&As…</span>",
+            unsafe_allow_html=True,
+        )
+        try:
+            def _rp(pct, lbl):
+                rlqa_prog.progress(pct)
+                rlqa_status.markdown(
+                    f"<span style='color:#A5F3FC;font-size:0.85rem'>{lbl}</span>",
+                    unsafe_allow_html=True,
+                )
+            new_qas = _generate_rlqa(_rp)
+            st.session_state.kb_rlqa_qas = new_qas
+            save_kb()
+            rlqa_prog.empty()
+            rlqa_status.success(
+                f"✅ {len(new_qas)} Q&As generated across "
+                f"{len(set(q['category'] for q in new_qas))} categories."
+            )
+            st.rerun()
+        except Exception as e:
+            rlqa_prog.empty()
+            rlqa_status.error(f"Error: {e}")
+
+    if not rlqa_qas:
+        if rlqa_files:
+            st.markdown(
+                "<div style='text-align:center;padding:32px;color:#374151;font-size:0.85rem'>"
+                "Click <b>Generate Q&As</b> above to extract knowledge from your files.</div>",
+                unsafe_allow_html=True,
+            )
+        return
+
+    # ── Search + filter ───────────────────────────────────────────
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    rs1, rs2 = st.columns([3, 1])
+    with rs1:
+        rlqa_search = st.text_input(
+            "search", placeholder="🔍  Search questions and answers…",
+            label_visibility="collapsed", key="rlqa_search",
+        )
+    with rs2:
+        rlqa_cats = ["All categories"] + sorted(set(q["category"] for q in rlqa_qas))
+        rlqa_cat_filter = st.selectbox(
+            "category", rlqa_cats, label_visibility="collapsed", key="rlqa_cat_filter",
+        )
+
+    slc = rlqa_search.lower().strip() if rlqa_search else ""
+    filtered = rlqa_qas
+    if rlqa_cat_filter and rlqa_cat_filter != "All categories":
+        filtered = [q for q in filtered if q["category"] == rlqa_cat_filter]
+    if slc:
+        filtered = [q for q in filtered
+                    if slc in q["question"].lower() or slc in q["answer"].lower()]
+
+    st.markdown(
+        f"<div style='font-size:0.78rem;color:#374151;margin:8px 0 16px'>"
+        f"Showing <b style='color:#22D3EE'>{len(filtered)}</b> of {n_qas} Q&amp;As</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Category accordion ────────────────────────────────────────
+    rlqa_edit_id = st.session_state.get("rlqa_edit_id", "")
+    cats_in_view = list(dict.fromkeys(q["category"] for q in filtered))
+
+    for rci, cat in enumerate(cats_in_view):
+        cat_items = [q for q in filtered if q["category"] == cat]
+        icon = _RLQA_CAT_ICONS.get(cat, "📌")
+
+        with st.expander(
+            f"{icon}  {cat}  ·  {len(cat_items)} Q&As" + "\u200b" * (rci + 50),
+            expanded=(len(cats_in_view) == 1 or rci == 0),
+        ):
+            for qi, qa in enumerate(cat_items):
+                qa_id = qa["id"]
+                is_editing = (rlqa_edit_id == qa_id)
+                edited_badge = (
+                    '<span class="cqa-edited-badge">✎ edited</span>'
+                    if qa.get("edited") else ""
+                )
+                src = qa.get("source_file", "")
+
+                st.markdown(
+                    f'<div class="cqa-card">'
+                    f'<div class="cqa-q">Q: {qa["question"]}</div>'
+                    + (f'<div class="cqa-a">A: {qa["answer"]}</div>' if not is_editing else "")
+                    + f'<div class="cqa-meta">'
+                    f'<span class="cqa-cat-badge" style="border-color:rgba(34,211,238,0.3);'
+                    f'color:#22D3EE;background:rgba(34,211,238,0.08)">{cat}</span>'
+                    + edited_badge
+                    + (f'<span style="margin-left:8px;color:#1F2937;font-size:0.68rem">'
+                       f'📁 {src}</span>' if src else "")
+                    + f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+                if is_editing:
+                    new_ans = st.text_area(
+                        "Edit answer", value=qa["answer"],
+                        key=f"rlqa_edit_area_{qa_id}", height=120,
+                        label_visibility="collapsed",
+                    )
+                    ec1, ec2 = st.columns(2)
+                    with ec1:
+                        if st.button("✅ Save", key=f"rlqa_save_{qa_id}", type="primary",
+                                     use_container_width=True):
+                            for item in st.session_state.kb_rlqa_qas:
+                                if item["id"] == qa_id:
+                                    item["answer"] = new_ans
+                                    item["edited"] = True
+                                    break
+                            st.session_state.rlqa_edit_id = ""
+                            save_kb(); st.rerun()
+                    with ec2:
+                        if st.button("✕ Cancel", key=f"rlqa_cancel_{qa_id}",
+                                     use_container_width=True):
+                            st.session_state.rlqa_edit_id = ""
+                            st.rerun()
+                else:
+                    eb1, eb2 = st.columns(2)
+                    with eb1:
+                        if st.button("✎ Edit", key=f"rlqa_edit_{qi}_{rci}",
+                                     use_container_width=True):
+                            st.session_state.rlqa_edit_id = qa_id
+                            st.rerun()
+                    with eb2:
+                        if st.button("🗑 Delete", key=f"rlqa_del_{qi}_{rci}",
+                                     use_container_width=True, type="secondary"):
+                            st.session_state.kb_rlqa_qas = [
+                                x for x in st.session_state.kb_rlqa_qas if x["id"] != qa_id
+                            ]
+                            save_kb(); st.rerun()
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -3762,6 +4378,9 @@ def render_faq():
         bucket = [f for f in faqs if f["category"] == cat]
         faq_curated.extend(bucket[:_FAQ_CAP_PER_CAT])
 
+    # Real Life Q&A (separate store)
+    rlqa_qas = st.session_state.get("kb_rlqa_qas", [])
+
     all_cats = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
     wa_cats  = list(dict.fromkeys(f["category"] for f in wa_faqs))
 
@@ -3786,17 +4405,19 @@ def render_faq():
             f'<div class="lp-stat lp-stat-v"><span class="n">{len(faq_curated)}</span><div class="l">Curated FAQ</div></div>'
             f'<div class="lp-stat lp-stat-p"><span class="n">{len(generic_faqs)}</span><div class="l">Q&amp;A Pairs</div></div>'
             f'<div class="lp-stat lp-stat-c"><span class="n">{len(wa_faqs)}</span><div class="l">WhatsApp Q&amp;A</div></div>'
+            f'<div class="lp-stat lp-stat-g"><span class="n">{len(rlqa_qas)}</span><div class="l">Real Life Q&amp;A</div></div>'
             f'<div class="lp-stat lp-stat-g"><span class="n">{total}</span><div class="l">KB Sources</div></div>'
             f'</div>'
             f'</div></div>',
             unsafe_allow_html=True,
         )
 
-        # ── 4-Tab layout ──────────────────────────────────────────────
-        tab_faq, tab_generic, tab_wa, tab_flow = st.tabs([
+        # ── 5-Tab layout ──────────────────────────────────────────────
+        tab_faq, tab_generic, tab_wa, tab_rlqa, tab_flow = st.tabs([
             f"📋  FAQ  ({len(faq_curated)})",
             f"💡  Q&A  ({len(generic_faqs)})",
             f"💬  WhatsApp  ({len(wa_faqs)})",
+            f"📂  Real Life Q&A  ({len(rlqa_qas)})",
             f"🗺️  Process Flow",
         ])
 
@@ -3821,7 +4442,11 @@ def render_faq():
                 no_content_msg="No WhatsApp Q&As yet — upload a chat export in Settings",
             )
 
-        # ── Tab 4: Process Flowchart ──────────────────────────────────
+        # ── Tab 4: Real Life Q&A ──────────────────────────────────────
+        with tab_rlqa:
+            _render_rlqa_tab()
+
+        # ── Tab 5: Process Flowchart ──────────────────────────────────
         with tab_flow:
             _render_flowchart_tab()
 
