@@ -810,32 +810,79 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 /* ══ FAQ / ANSWER STUDIO (below hero) ════════════════════ */
 .cat-label {
     display: inline-flex; align-items: center; gap: 7px;
-    background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08));
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(139,92,246,0.28);
-    color: #C4B5FD !important; padding: 6px 18px; border-radius: 20px;
+    background: #DBEAFE;
+    border: 1px solid #93C5FD;
+    color: #1D4ED8 !important; padding: 6px 18px; border-radius: 20px;
     font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em;
     margin: 26px 0 14px;
-    box-shadow: 0 2px 14px rgba(139,92,246,0.10);
 }
 
-/* Answer blocks */
-.faq-answer-wrap { padding: 16px 18px 20px; background: transparent; }
+/* Answer blocks — blue text on very light blue */
+.faq-answer-wrap {
+    padding: 16px 18px 20px;
+    background: #EFF6FF;
+    border-radius: 0 0 12px 12px;
+}
 .faq-answer-label {
     font-size: 0.67rem; font-weight: 700; letter-spacing: 0.14em;
-    text-transform: uppercase; color: #6366F1; margin-bottom: 10px;
+    text-transform: uppercase; color: #1D4ED8; margin-bottom: 10px;
 }
 .faq-answer-body {
-    font-size: 0.91rem; color: #94A3B8;
+    font-size: 0.91rem; color: #1E3A8A;
     line-height: 1.86;
     padding: 14px 18px;
-    background: rgba(11,15,26,0.65);
-    backdrop-filter: blur(10px);
-    border-left: 3px solid #6366F1;
+    background: #DBEAFE;
+    border-left: 3px solid #3B82F6;
     border-radius: 0 12px 12px 0;
 }
-.faq-answer-body strong, .faq-answer-body b { color: #818CF8; font-weight: 600; }
-.faq-answer-body em { color: #4B5563; font-style: italic; }
+.faq-answer-body strong, .faq-answer-body b { color: #1D4ED8; font-weight: 600; }
+.faq-answer-body em { color: #2563EB; font-style: italic; }
+.faq-answer-body a { color: #2563EB !important; }
+
+/* ── Expanders — blue on light blue ── */
+[data-testid="stExpander"] {
+    background: #EFF6FF !important;
+    border: 1px solid #BFDBFE !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+[data-testid="stExpander"] > details > summary {
+    background: #EFF6FF !important;
+    color: #1E3A8A !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    padding: 13px 18px !important;
+}
+[data-testid="stExpander"] > details > summary:hover {
+    background: #DBEAFE !important;
+    color: #1D4ED8 !important;
+}
+[data-testid="stExpander"] > details > summary p,
+[data-testid="stExpander"] > details > summary span {
+    color: #1E3A8A !important;
+}
+[data-testid="stExpander"] details[open] > summary {
+    border-bottom: 1px solid #BFDBFE !important;
+}
+[data-testid="stExpander"] .streamlit-expanderContent {
+    background: #EFF6FF !important;
+    color: #1E3A8A !important;
+}
+[data-testid="stExpander"] .streamlit-expanderContent p,
+[data-testid="stExpander"] .streamlit-expanderContent li,
+[data-testid="stExpander"] .streamlit-expanderContent span {
+    color: #1E3A8A !important;
+}
+
+/* General descriptive / body text in main content */
+[data-testid="stVerticalBlock"] .stMarkdown p {
+    color: #1E3A8A !important;
+}
+[data-testid="stVerticalBlock"] .stMarkdown li {
+    color: #1E3A8A !important;
+}
+/* Tab labels stay light */
+[data-testid="stTabs"] [data-testid="stMarkdownContainer"] p { color: inherit !important; }
 
 /* Source badges */
 .faq-wa-badge {
@@ -912,75 +959,85 @@ hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; marg
 .wa-chat-meta { font-size: 0.72rem; color: #9CA3AF; margin-bottom: 4px; }
 .wa-chat-qa   { font-size: 0.7rem; color: #10B981; font-weight: 600; margin-top: 5px; }
 
-/* ── Chat side panel ── */
-.chat-panel-wrap {
-    background: rgba(13,17,30,0.97);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border: 1px solid rgba(99,102,241,0.22);
-    border-radius: 18px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.50), 0 0 0 1px rgba(99,102,241,0.06);
+/* ── Floating chat widget ─────────────────────────────── */
+.cf-shell {
+    background: rgba(10,13,24,0.98);
+    border: 1px solid rgba(139,92,246,0.22);
+    border-radius: 20px;
+    box-shadow: 0 28px 70px rgba(0,0,0,0.7), 0 0 0 1px rgba(139,92,246,0.08);
     overflow: hidden;
-    padding-bottom: 12px;
+    animation: cfIn 0.26s cubic-bezier(0.2,0.8,0.4,1) both;
+    width: 100%;
 }
-.chat-panel-header {
-    background: linear-gradient(135deg, rgba(17,24,39,0.96) 0%, rgba(26,32,53,0.96) 100%);
-    border-bottom: 1px solid rgba(255,255,255,0.06);
-    padding: 16px 20px 14px;
-    display: flex; align-items: center; justify-content: space-between;
+@keyframes cfIn {
+    from { opacity:0; transform:translateY(18px) scale(0.96); }
+    to   { opacity:1; transform:translateY(0)     scale(1);   }
 }
-.chat-panel-title {
-    font-size: 0.88rem; font-weight: 700; color: #E5E7EB;
-    letter-spacing: -0.015em; display: flex; align-items: center; gap: 9px;
+.cf-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:13px 16px;
+    background:linear-gradient(135deg,rgba(17,24,39,1) 0%,rgba(22,30,50,1) 100%);
+    border-bottom:1px solid rgba(255,255,255,0.05);
 }
-.chat-panel-title .live-dot-sm {
-    width: 8px; height: 8px; border-radius: 50%; background: #10B981;
-    box-shadow: 0 0 7px rgba(16,185,129,0.60);
-    animation: livepulse 3s ease-in-out infinite;
+.cf-title-row { display:flex; align-items:center; gap:8px; }
+.cf-live-dot { width:8px; height:8px; border-radius:50%; background:#10B981;
+    box-shadow:0 0 6px rgba(16,185,129,0.7); animation:livepulse 3s ease-in-out infinite; }
+.cf-title { font-size:0.87rem; font-weight:700; color:#E5E7EB; }
+.cf-sub   { font-size:0.68rem; color:#6B7280; margin-top:1px; }
+.cf-msgs {
+    padding:12px 14px;
+    max-height:320px; min-height:60px;
+    overflow-y:auto; display:flex; flex-direction:column; gap:9px;
+    scroll-behavior:smooth;
 }
-.chat-panel-title .sub {
-    font-size: 0.7rem; color: #6B7280; font-weight: 400; margin-top: 2px;
+.cf-msgs::-webkit-scrollbar { width:3px; }
+.cf-msgs::-webkit-scrollbar-thumb { background:rgba(139,92,246,0.35); border-radius:2px; }
+.cf-user-bubble {
+    align-self:flex-end;
+    background:linear-gradient(135deg,#7C3AED,#6D28D9);
+    color:#F3F4F6; font-size:0.82rem; line-height:1.5;
+    padding:9px 13px; border-radius:16px 16px 4px 16px;
+    max-width:88%; word-break:break-word;
 }
-.chat-panel-msgs {
-    padding: 14px 16px; max-height: 52vh; overflow-y: auto;
-    scrollbar-width: thin; scrollbar-color: rgba(99,102,241,0.2) transparent;
+.cf-ai-bubble {
+    align-self:flex-start;
+    background:rgba(26,34,52,0.9); color:#D1D5DB;
+    font-size:0.82rem; line-height:1.6;
+    padding:9px 13px; border-radius:16px 16px 16px 4px;
+    max-width:92%; border:1px solid rgba(255,255,255,0.06);
+    word-break:break-word;
 }
-.mini-msg-user {
-    display: flex; justify-content: flex-end; margin-bottom: 12px;
+.cf-empty { text-align:center; padding:28px 14px; color:#6B7280; font-size:0.8rem; }
+.cf-empty-icon { font-size:1.7rem; margin-bottom:8px; opacity:0.55; display:block; }
+/* FAB — Streamlit button override when sitting in the float container */
+.cf-fab-wrap button {
+    width:58px !important; height:58px !important;
+    border-radius:50% !important; padding:0 !important;
+    background:linear-gradient(135deg,#8B5CF6,#EC4899) !important;
+    color:#fff !important; font-size:1.45rem !important;
+    border:none !important;
+    box-shadow:0 4px 28px rgba(139,92,246,0.55) !important;
+    transition:transform 0.22s cubic-bezier(.34,1.56,.64,1) !important;
+    animation:fab-pulse 3s ease-in-out infinite !important;
 }
-.mini-msg-user span {
-    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
-    color: #EEF2FF; padding: 9px 14px;
-    border-radius: 16px 16px 4px 16px;
-    font-size: 0.83rem; line-height: 1.55; max-width: 82%;
-    box-shadow: 0 3px 14px rgba(99,102,241,0.28);
+.cf-fab-wrap button:hover { transform:scale(1.1) !important; }
+/* Close button in chat header */
+.cf-close-btn button {
+    padding:2px 10px !important; font-size:0.75rem !important;
+    border-radius:8px !important; min-height:28px !important;
+    background:rgba(255,255,255,0.06) !important;
+    color:#9CA3AF !important; border:1px solid rgba(255,255,255,0.1) !important;
 }
-.mini-msg-ai {
-    display: flex; align-items: flex-start; gap: 9px; margin-bottom: 12px;
+.cf-close-btn button:hover { background:rgba(255,255,255,0.12) !important; color:#E5E7EB !important; }
+/* Input row inside float panel */
+.cf-input-row { padding:8px 12px 10px; border-top:1px solid rgba(255,255,255,0.05); }
+.cf-input-row .stTextInput > div > div > input {
+    background:rgba(17,24,39,0.9) !important; border:1px solid rgba(99,102,241,0.25) !important;
+    border-radius:10px !important; color:#E5E7EB !important; font-size:0.83rem !important;
 }
-.mini-msg-ai .av {
-    width: 28px; height: 28px; border-radius: 9px; flex-shrink: 0;
-    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.62rem; color: #EEF2FF; font-weight: 700;
-    box-shadow: 0 0 14px rgba(99,102,241,0.22);
+.cf-input-row .stTextInput > div > div > input:focus {
+    border-color:rgba(139,92,246,0.55) !important; box-shadow:0 0 0 2px rgba(139,92,246,0.15) !important;
 }
-.mini-msg-ai .bubble {
-    background: rgba(17,24,39,0.75);
-    backdrop-filter: blur(12px);
-    color: #C4C9D4;
-    padding: 10px 14px;
-    border-radius: 4px 16px 16px 16px;
-    font-size: 0.83rem; line-height: 1.65; max-width: 82%;
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.18);
-}
-.mini-chat-empty {
-    text-align: center; padding: 32px 16px;
-}
-.mini-chat-empty .icon { font-size: 1.8rem; margin-bottom: 10px; opacity: 0.6; }
-.mini-chat-empty .text { font-size: 0.8rem; color: #6B7280; line-height: 1.6; }
-.mini-chat-input-row { padding: 8px 16px 0; display: flex; gap: 8px; align-items: center; }
 
 /* Nav pill buttons */
 div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button,
@@ -990,54 +1047,9 @@ div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn_faq"]) .stButt
     border-radius: 20px !important;
 }
 
-/* ── Chat FAB (floating action button) ── */
-.chat-fab {
-    position: fixed;
-    bottom: 2.2rem;
-    right: 2.2rem;
-    z-index: 9999;
-    width: 58px; height: 58px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #8B5CF6 0%, #EC4899 50%, #22D3EE 100%);
-    box-shadow: 0 4px 28px rgba(139,92,246,0.55), 0 0 0 0 rgba(139,92,246,0.25);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.4rem; text-decoration: none; color: #fff;
-    transition: transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.22s ease;
-    animation: fab-pulse 3s ease-in-out infinite;
-}
-.chat-fab:hover {
-    transform: scale(1.12);
-    box-shadow: 0 8px 32px rgba(99,102,241,0.65);
-    color: #fff;
-    text-decoration: none;
-}
-.chat-fab-tooltip {
-    position: fixed;
-    bottom: 3.0rem;
-    right: 5.4rem;
-    z-index: 9998;
-    background: rgba(17,24,39,0.92);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(99,102,241,0.25);
-    border-radius: 10px;
-    padding: 6px 14px;
-    color: #E5E7EB;
-    font-size: 0.78rem;
-    font-family: 'Inter', sans-serif;
-    font-weight: 500;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transform: translateX(6px);
-    transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.chat-fab:hover ~ .chat-fab-tooltip {
-    opacity: 1;
-    transform: translateX(0);
-}
 @keyframes fab-pulse {
-    0%, 100% { box-shadow: 0 4px 28px rgba(139,92,246,0.55), 0 0 0 0  rgba(139,92,246,0.25); }
-    50%       { box-shadow: 0 4px 28px rgba(139,92,246,0.55), 0 0 0 10px rgba(139,92,246,0); }
+    0%,100% { box-shadow:0 4px 28px rgba(139,92,246,0.55),0 0 0 0 rgba(139,92,246,0.25); }
+    50%      { box-shadow:0 4px 28px rgba(139,92,246,0.55),0 0 0 10px rgba(139,92,246,0); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -2535,12 +2547,144 @@ def _render_mini_chat():
         st.rerun()
 
 
+def _float_via_js(marker_id: str, width: str, bottom: str = "24px", right: str = "24px", z: str = "9999"):
+    """Inject JS that positions the Streamlit container holding `marker_id` as fixed overlay."""
+    st.markdown(f"""<script>
+(function(){{
+    var F=function(){{
+        var m=document.getElementById('{marker_id}');
+        if(!m)return;
+        var el=m;
+        for(var i=0;i<14;i++){{
+            el=el.parentElement;
+            if(!el)break;
+            var t=el.getAttribute&&el.getAttribute('data-testid');
+            if(t==='stVerticalBlock'){{
+                el.style.setProperty('position','fixed','important');
+                el.style.setProperty('bottom','{bottom}','important');
+                el.style.setProperty('right','{right}','important');
+                el.style.setProperty('width','{width}','important');
+                el.style.setProperty('z-index','{z}','important');
+                el.style.setProperty('margin','0','important');
+                el.style.setProperty('padding','0','important');
+                break;
+            }}
+        }}
+    }};
+    F();setTimeout(F,80);setTimeout(F,300);
+}})();
+</script>""", unsafe_allow_html=True)
+
+
+def _render_chat_float():
+    """Floating chat overlay — stays on the landing page, no layout shift."""
+    chat_open = st.session_state.get("chat_open", False)
+
+    if not chat_open:
+        # ── FAB only ──────────────────────────────────────────────
+        st.markdown('<div id="cf-fab-mk" style="display:none"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="cf-fab-wrap">', unsafe_allow_html=True)
+        if st.button("💬", key="cf_fab_open", help="Chat with Animesh"):
+            st.session_state.chat_open = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+        _float_via_js("cf-fab-mk", "64px")
+        return
+
+    # ── Full chat panel ───────────────────────────────────────────
+    st.markdown('<div id="cf-panel-mk" style="display:none"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="cf-shell">', unsafe_allow_html=True)
+
+    # Header
+    st.markdown(
+        '<div class="cf-header">'
+        '<div class="cf-title-row">'
+        '<span class="cf-live-dot"></span>'
+        '<div><div class="cf-title">AI Chat</div>'
+        '<div class="cf-sub">Animesh · Powered by Claude</div></div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Close button (right-aligned)
+    st.markdown('<div style="text-align:right;padding:6px 12px 0" class="cf-close-btn">', unsafe_allow_html=True)
+    if st.button("✕ Close", key="cf_close", type="secondary"):
+        st.session_state.chat_open = False
+        st.session_state.quick_q = ""
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Messages
+    history = st.session_state.get("chat_history", [])
+    if history:
+        msgs = ""
+        for msg in history[-20:]:
+            c = msg["content"]
+            if msg["role"] == "user":
+                safe = c.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>")
+                msgs += f'<div class="cf-user-bubble">{safe}</div>'
+            else:
+                msgs += f'<div class="cf-ai-bubble">{c}</div>'
+        st.markdown(f'<div class="cf-msgs">{msgs}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(
+            '<div class="cf-msgs"><div class="cf-empty">'
+            '<span class="cf-empty-icon">✦</span>'
+            "Hi, I'm Animesh.<br>Ask me anything about Convin Sense."
+            '</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    st.markdown('</div>', unsafe_allow_html=True)  # close cf-shell
+
+    # ── Streaming placeholder ─────────────────────────────────────
+    stream_ph = st.empty()
+
+    # ── Input row ────────────────────────────────────────────────
+    st.markdown('<div class="cf-input-row">', unsafe_allow_html=True)
+    in_col, send_col = st.columns([5, 1])
+    with in_col:
+        pre = st.session_state.get("quick_q", "")
+        user_input = st.text_input(
+            "cf_msg", placeholder="Ask a question…",
+            label_visibility="collapsed", key="cf_text_input",
+            value=pre,
+        )
+        if pre:
+            st.session_state.quick_q = ""
+    with send_col:
+        send_btn = st.button("↵", key="cf_send", type="primary")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # Handle send
+    active = user_input.strip() if user_input else ""
+    if (send_btn or active) and active and active != st.session_state.get("_mini_last", ""):
+        st.session_state["_mini_last"] = active
+        ts = datetime.now().strftime("%H:%M")
+        st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts})
+        answer, sources = ask_claude_stream(active, stream_ph)
+        st.session_state.chat_history.append({"role": "assistant", "content": answer, "ts": ts, "sources": sources})
+        st.rerun()
+
+    # Clear button
+    if history:
+        st.markdown('<div style="padding:0 12px 10px">', unsafe_allow_html=True)
+        if st.button("🗑 Clear chat", key="cf_clear", type="secondary", use_container_width=True):
+            st.session_state.chat_history = []
+            st.session_state["_mini_last"] = ""
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # JS: position this block fixed in bottom-right
+    _float_via_js("cf-panel-mk", "370px", bottom="90px")
+
+
 def render_faq():
     render_topnav(show_settings_btn=False, show_back_btn=False, show_chat_btn=True)
 
     faqs  = st.session_state.get("kb_faqs", [])
     total = total_sources()
-    chat_open = st.session_state.get("chat_open", False)
 
     # Partition into WhatsApp, generic, and curated Convin FAQ
     wa_faqs      = [f for f in faqs if f["category"].startswith("WhatsApp:")]
@@ -2555,13 +2699,8 @@ def render_faq():
     all_cats = list(dict.fromkeys(f["category"] for f in faqs)) if faqs else []
     wa_cats  = list(dict.fromkeys(f["category"] for f in wa_faqs))
 
-    # ── Layout: 2-col when chat open, full-width otherwise ────────
-    if chat_open:
-        faq_col, chat_col = st.columns([3, 2], gap="small")
-    else:
-        faq_col = st.container()
-
-    with faq_col:
+    # ── Main content — always full-width ──────────────────────────
+    with st.container():
 
     # ── Hero ──────────────────────────────────────────────────────
         # ── Landing Hero ──────────────────────────────────────────────
@@ -2656,8 +2795,8 @@ def render_faq():
         with tab_faq:
             if faq_curated:
                 st.markdown(
-                    "<div style='font-size:0.78rem;color:#9CA3AF;margin-bottom:16px'>"
-                    "Curated Q&amp;As about <b style='color:#A78BFA'>Convin Sense</b> — "
+                    "<div style='font-size:0.78rem;color:#1E40AF;margin-bottom:16px;background:#EFF6FF;padding:10px 14px;border-radius:8px;border:1px solid #BFDBFE'>"
+                    "Curated Q&amp;As about <b style='color:#1D4ED8'>Convin Sense</b> — "
                     "product features, capabilities, pricing &amp; how it works.</div>",
                     unsafe_allow_html=True,
                 )
@@ -2684,9 +2823,9 @@ def render_faq():
         with tab_generic:
             if generic_faqs:
                 st.markdown(
-                    "<div style='font-size:0.78rem;color:#9CA3AF;margin-bottom:16px'>"
-                    "All Q&amp;As extracted from <b style='color:#A78BFA'>documents</b> and "
-                    "<b style='color:#A78BFA'>web pages</b> — covering every topic and category.</div>",
+                    "<div style='font-size:0.78rem;color:#1E40AF;margin-bottom:16px;background:#EFF6FF;padding:10px 14px;border-radius:8px;border:1px solid #BFDBFE'>"
+                    "All Q&amp;As extracted from <b style='color:#1D4ED8'>documents</b> and "
+                    "<b style='color:#1D4ED8'>web pages</b> — covering every topic and category.</div>",
                     unsafe_allow_html=True,
                 )
                 _render_faq_list(generic_faqs, "generic", "search_generic")
@@ -2701,74 +2840,14 @@ def render_faq():
 
         # ── Tab 3: WhatsApp Q&As ──────────────────────────────────────
         with tab_wa:
-            wa_chats = st.session_state.get("kb_whatsapp", [])
-            if wa_chats:
-                wa_cards = ""
-                for w in wa_chats:
-                    meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
-                    if not meta.get("valid"):
-                        continue
-                    plist = " · ".join(meta.get("participants", [])[:3])
-                    if len(meta.get("participants", [])) > 3:
-                        plist += f" +{len(meta['participants'])-3}"
-                    wa_cards += (
-                        f'<div class="wa-chat-card">'
-                        f'<div class="wa-chat-top"><span class="wa-chat-icon">💬</span>'
-                        f'<span class="wa-chat-name">{w["name"]}</span>'
-                        f'<span class="wa-chat-badge">{meta.get("total",0):,} msgs</span></div>'
-                        f'<div class="wa-chat-meta">👥 {plist} &nbsp;·&nbsp; 📅 {meta.get("date_range","")}</div>'
-                        + (f'<div class="wa-chat-qa">✦ {len(wa_faqs)} answers across {len(wa_cats)} categories</div>'
-                           if wa_faqs else '')
-                        + '</div>'
-                    )
-                if wa_cards:
-                    st.markdown(
-                        f'<div class="wa-panel"><div class="wa-panel-title">💬 WhatsApp Chats in Knowledge Base</div>'
-                        f'<div class="wa-cards-row">{wa_cards}</div></div>',
-                        unsafe_allow_html=True,
-                    )
-
             if wa_faqs:
-                # ── Category dashboard ────────────────────────────────
-                wa_cat_counts = {}
-                for f in wa_faqs:
-                    label = f["category"].replace("WhatsApp: ", "")
-                    wa_cat_counts[label] = wa_cat_counts.get(label, 0) + 1
-
-                CAT_ICONS = {
-                    "Pilot Clients & Metrics": "📊",
-                    "Product Issues & Bugs":   "🐛",
-                    "Setup & Configuration":   "⚙️",
-                    "Onboarding Learnings":    "🚀",
-                    "Client Objections & Responses": "💬",
-                    "Feature Requests":        "✨",
-                    "Bot Performance":         "🤖",
-                    "Sales Process":           "💼",
-                }
-                cat_cards_html = ""
-                for label, count in sorted(wa_cat_counts.items(), key=lambda x: -x[1]):
-                    icon = CAT_ICONS.get(label, "📌")
-                    cat_cards_html += (
-                        f'<div style="background:#1a1d2e;border:1px solid #2d3158;border-radius:10px;'
-                        f'padding:14px 16px;min-width:160px;flex:1">'
-                        f'<div style="font-size:1.4rem">{icon}</div>'
-                        f'<div style="font-size:1.5rem;font-weight:700;color:#A78BFA;margin:4px 0">{count}</div>'
-                        f'<div style="font-size:0.72rem;color:#9CA3AF;line-height:1.3">{label}</div>'
-                        f'</div>'
-                    )
                 st.markdown(
-                    f'<div style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 24px">'
-                    f'{cat_cards_html}</div>',
+                    "<div style='font-size:0.78rem;color:#1E40AF;margin-bottom:16px;background:#EFF6FF;padding:10px 14px;border-radius:8px;border:1px solid #BFDBFE'>"
+                    "Q&amp;As extracted from <b style='color:#1D4ED8'>WhatsApp pilot conversations</b> — "
+                    "client metrics, issues, onboarding learnings &amp; bot performance.</div>",
                     unsafe_allow_html=True,
                 )
-
-                # ── Per-category expandable Q&A sections ──────────────
-                for label, count in sorted(wa_cat_counts.items(), key=lambda x: -x[1]):
-                    icon = CAT_ICONS.get(label, "📌")
-                    full_cat = "WhatsApp: " + label
-                    bucket = [f for f in wa_faqs if f["category"] == full_cat]
-                    with st.expander(f"{icon} {label}  ·  {count} Q&As", expanded=False):
-                        _render_faq_list(bucket, f"wa_{label[:20]}", f"search_wa_{label[:20]}")
+                _render_faq_list(wa_faqs, "wa", "search_wa")
             else:
                 st.markdown("""
                 <div class="no-faq">
@@ -2778,17 +2857,8 @@ def render_faq():
                 </div>
                 """, unsafe_allow_html=True)
 
-    # ── Chat panel (right column when open) ───────────────────────
-    if chat_open:
-        with chat_col:
-            _render_mini_chat()
-
-    # ── FAB — only when panel is closed ───────────────────────────
-    if not chat_open:
-        st.markdown("""
-        <a href="?nav=chat" class="chat-fab" title="Open AI Chat">💬</a>
-        <span class="chat-fab-tooltip">AI Chat</span>
-        """, unsafe_allow_html=True)
+    # ── Floating chat widget (always rendered, positioned via JS) ──
+    _render_chat_float()
 
 
 # ══════════════════════════════════════════════════════════════════
