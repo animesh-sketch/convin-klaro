@@ -5120,19 +5120,45 @@ def render_faq():
     )
 
     # ── Stat cards ────────────────────────────────────────────────
-    st.markdown(
-        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 20px">'
-        + "".join(
+    sqna_count = len(st.session_state.get("kb_support_qas", []))
+    cards_before = ["FAQ", "Q&A", "Use Cases"]
+    cards_after  = ["More Q&A", "All"]
+
+    def _stat_card(k):
+        return (
             f'<div style="background:#1a1d2e;border:1px solid #2d3158;border-radius:10px;'
             f'padding:12px 18px;flex:1;min-width:100px;text-align:center">'
             f'<div style="font-size:1.4rem;font-weight:800;color:#A78BFA">{SOURCE_COUNTS[k]:,}</div>'
             f'<div style="font-size:0.72rem;color:#9CA3AF;margin-top:3px">{k}</div>'
             f'</div>'
-            for k in SOURCE_BUCKETS
         )
+
+    sqna_card = (
+        f'<div style="background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(139,92,246,0.12));'
+        f'border:1px solid rgba(99,102,241,0.35);border-radius:10px;'
+        f'padding:12px 18px;flex:1;min-width:100px;text-align:center;cursor:pointer" '
+        f'title="Open Support Sheet">'
+        f'<div style="font-size:1.4rem;font-weight:800;color:#A78BFA">{sqna_count:,}</div>'
+        f'<div style="font-size:0.72rem;color:#A78BFA;margin-top:3px;font-weight:600">📋 Support Sheet</div>'
+        f'</div>'
+    )
+
+    st.markdown(
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 8px">'
+        + "".join(_stat_card(k) for k in cards_before)
+        + sqna_card
+        + "".join(_stat_card(k) for k in cards_after)
         + "</div>",
         unsafe_allow_html=True,
     )
+
+    # ── Support Sheet button (below the card it mirrors) ─────────
+    _, _mid, _ = st.columns([3, 2, 3])
+    with _mid:
+        if st.button("📋 Open Support Sheet →", key="faq_sqna_btn", use_container_width=True):
+            st.session_state.page = "support_qna"
+            st.rerun()
+    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
     # ── Search + Filter row ───────────────────────────────────────
     sc, fc, cc = st.columns([4, 2, 2])
