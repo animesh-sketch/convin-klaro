@@ -6,6 +6,7 @@ AI-powered knowledge & support intelligence platform
 import streamlit as st
 import streamlit.components.v1 as _components
 import json, re, os, base64, zipfile, io, uuid, time
+import psycopg2, psycopg2.extras
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
 import anthropic
@@ -29,7 +30,7 @@ _LOGO_URI = _b64_img(os.path.join(os.path.dirname(os.path.abspath(__file__)), "c
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_FILE = os.path.join(APP_DIR, "kb_store.json")
 KB_KEYS = ("kb_documents", "kb_links", "kb_whatsapp", "kb_crawled", "kb_faqs",
-           "kb_client_chats", "kb_rlqa_files", "kb_rlqa_qas")
+           "kb_client_chats", "kb_rlqa_files", "kb_rlqa_qas", "kb_support_qas")
 MAX_CTX  = 580_000   # chars — safely under Claude's 200k-token window
 
 st.set_page_config(
@@ -1114,34 +1115,121 @@ div[data-testid="stHorizontalBlock"]:has(button[key="back_btn"]) .stButton > but
     0%,100% { box-shadow:0 4px 28px rgba(139,92,246,0.55),0 0 0 0 rgba(139,92,246,0.25); }
     50%      { box-shadow:0 4px 28px rgba(139,92,246,0.55),0 0 0 10px rgba(139,92,246,0); }
 }
+
+/* ══ SUPPORT QUICK SHEET ══════════════════════════════════ */
+.sqna-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 12px;
+    padding: 4px 0 28px;
+}
+.sqna-card {
+    background: #111827;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 14px 16px;
+    transition: border-color 0.18s, box-shadow 0.18s;
+}
+.sqna-card:hover {
+    border-color: rgba(99,102,241,0.38);
+    box-shadow: 0 4px 18px rgba(99,102,241,0.10);
+}
+.sqna-q {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #E5E7EB;
+    margin-bottom: 7px;
+    line-height: 1.45;
+}
+.sqna-a {
+    font-size: 0.81rem;
+    color: #94A3B8;
+    line-height: 1.6;
+}
+.sqna-tag {
+    display: inline-block;
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    margin-bottom: 7px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.sqna-tag-doc  { background:rgba(59,130,246,0.14); color:#60A5FA; border:1px solid rgba(59,130,246,0.22); }
+.sqna-tag-wa   { background:rgba(16,185,129,0.13); color:#34D399; border:1px solid rgba(16,185,129,0.20); }
+.sqna-tag-rlqa { background:rgba(245,158,11,0.12); color:#FCD34D; border:1px solid rgba(245,158,11,0.20); }
+.sqna-tag-kb   { background:rgba(139,92,246,0.14); color:#A78BFA; border:1px solid rgba(139,92,246,0.22); }
+.sqna-cat-pill {
+    font-size: 0.67rem;
+    color: #475569;
+    margin-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 6px;
+}
 </style>
 """, unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════════════════════
-#  STORAGE  —  Streamlit-native JSON file (kb_store.json)
+#  STORAGE  —  Neon (serverless Postgres)
 # ══════════════════════════════════════════════════════════════════
+@st.cache_resource
+def _neon_conn():
+    conn = psycopg2.connect(st.secrets["NEON_DATABASE_URL"])
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS kb_store (
+                id INTEGER PRIMARY KEY,
+                data JSONB NOT NULL DEFAULT '{}'::jsonb
+            )
+        """)
+        cur.execute("""
+            INSERT INTO kb_store (id, data) VALUES (1, '{}'::jsonb)
+            ON CONFLICT (id) DO NOTHING
+        """)
+    return conn
+
+def _db():
+    conn = _neon_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+    except Exception:
+        _neon_conn.clear()
+        conn = _neon_conn()
+    return conn
+
 def load_kb():
     if st.session_state.get("_kb_loaded"):
         return
-    if os.path.exists(KB_FILE):
-        try:
-            with open(KB_FILE, "r", encoding="utf-8") as f:
-                d = json.load(f)
-            for k in KB_KEYS:
-                st.session_state[k] = d.get(k, [])
-            st.session_state["kb_client_qas"] = d.get("kb_client_qas", {})
-            st.session_state["show_sources"] = d.get("show_sources", False)
-        except Exception:
-            pass
+    try:
+        with _db().cursor() as cur:
+            cur.execute("SELECT data FROM kb_store WHERE id = 1")
+            row = cur.fetchone()
+            if row:
+                d = row[0]
+                for k in KB_KEYS:
+                    st.session_state[k] = d.get(k, [])
+                st.session_state["kb_client_qas"] = d.get("kb_client_qas", {})
+                st.session_state["show_sources"] = d.get("show_sources", False)
+    except Exception:
+        pass
     st.session_state["_kb_loaded"] = True
 
 def save_kb():
     data = {k: st.session_state.get(k, []) for k in KB_KEYS}
     data["kb_client_qas"] = st.session_state.get("kb_client_qas", {})
     data["show_sources"] = st.session_state.get("show_sources", False)
-    with open(KB_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    try:
+        with _db().cursor() as cur:
+            cur.execute(
+                "UPDATE kb_store SET data = %s WHERE id = 1",
+                (psycopg2.extras.Json(data),)
+            )
+    except Exception:
+        pass
 
 def kb_stats():
     docs  = len(st.session_state.get("kb_documents", []))
@@ -1923,6 +2011,100 @@ def generate_faqs(progress_cb=None) -> list[dict]:
     return deduped
 
 
+def generate_support_qas(progress_cb=None) -> list[dict]:
+    """Build a support-agent quick-reference sheet from ALL knowledge sources.
+
+    Rewrites answers from existing Q&As (kb_faqs, kb_rlqa_qas, kb_client_qas)
+    to 1–2 sentences max. Falls back to raw extraction if no Q&As exist yet.
+    """
+    client = get_client()
+
+    # ── Collect all existing Q&As from every source ───────────────
+    all_existing: list[dict] = []
+
+    faqs = st.session_state.get("kb_faqs", [])
+    all_existing.extend(faqs)
+
+    rlqa = st.session_state.get("kb_rlqa_qas", [])
+    all_existing.extend(rlqa)
+
+    client_qas = st.session_state.get("kb_client_qas", {})
+    for qas in client_qas.values():
+        all_existing.extend(qas)
+
+    CRISP_RULES = (
+        "Rules:\n"
+        "• Each answer MUST be 1–2 sentences max. No bullet lists. No headers.\n"
+        "• Tone: support agent — direct, confident, helpful.\n"
+        "• Start with the answer. Never open with 'Yes', 'Sure', or 'Great question'.\n"
+        "• Summarise any process into one sentence.\n"
+        "• Preserve product names and proper nouns exactly.\n"
+        "• Return ONLY a raw JSON array (no markdown fences, no extra text):\n"
+        '[\n  {"category":"Cat","question":"Q?","answer":"Crisp 1-line answer."},\n  ...\n]\n'
+    )
+
+    result: list[dict] = []
+
+    if all_existing:
+        # ── Rewrite in batches of 80 ──────────────────────────────
+        BATCH = 80
+        batches = [all_existing[i:i + BATCH] for i in range(0, len(all_existing), BATCH)]
+        total_b = len(batches)
+
+        for bi, batch in enumerate(batches):
+            pct = 0.05 + (bi / total_b) * 0.85
+            if progress_cb:
+                progress_cb(pct, f"✍️ Batch {bi+1}/{total_b} — rewriting {len(batch)} answers as support agent…")
+
+            qa_block = json.dumps(
+                [{"category": q.get("category", "General"),
+                  "question":  q.get("question", ""),
+                  "answer":    q.get("answer", "")}
+                 for q in batch],
+                indent=2,
+            )
+            prompt = (
+                "You are a support agent editor. Rewrite every answer to be short, crisp, and direct.\n\n"
+                + CRISP_RULES
+                + "\nQ&As to rewrite:\n" + qa_block
+            )
+            try:
+                result.extend(_faq_call(client, prompt))
+            except Exception:
+                pass
+
+    else:
+        # ── No Q&As yet — extract from raw docs/links ─────────────
+        ctx, _ = build_context()
+        if ctx.strip():
+            if progress_cb:
+                progress_cb(0.20, "🔍 Extracting support Q&As from knowledge base…")
+            prompt = (
+                "You are extracting support-agent Q&As from the knowledge base.\n"
+                "Focus on questions a customer or support agent would actually ask.\n\n"
+                + CRISP_RULES
+                + "\nKNOWLEDGE BASE:\n" + ctx
+            )
+            try:
+                result.extend(_faq_call(client, prompt))
+            except Exception:
+                pass
+
+    if progress_cb:
+        progress_cb(0.95, "✨ Finalising support sheet…")
+
+    # Deduplicate by question
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for f in result:
+        key = f["question"].lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(f)
+
+    return deduped
+
+
 # ══════════════════════════════════════════════════════════════════
 #  SHARED TOP NAV
 # ══════════════════════════════════════════════════════════════════
@@ -1956,7 +2138,10 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
     # Streamlit buttons — functional nav row
     nav_spacer = st.container()
     with nav_spacer:
-        c_l, c_faq, c_set = st.columns([5.5, 1.3, 1.3])
+        if show_chat_btn:
+            c_l, c_sheet, c_chat, c_set = st.columns([4.0, 1.4, 1.4, 1.4])
+        else:
+            c_l, c_faq, c_set = st.columns([5.5, 1.3, 1.3])
         if show_back_btn:
             with c_l:
                 if st.button("← Back to Answer Studio", key="back_btn", type="secondary"):
@@ -1974,7 +2159,12 @@ def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=Fal
                     st.session_state.page = "settings"
                     st.rerun()
         if show_chat_btn:
-            with c_faq:
+            with c_sheet:
+                if st.button("📋 Support Sheet", key="sqna_nav_btn", type="secondary",
+                             use_container_width=True):
+                    st.session_state.page = "support_qna"
+                    st.rerun()
+            with c_chat:
                 if st.button("💬 Chat with AI", key="chat_topnav_btn", type="primary",
                              use_container_width=True):
                     st.session_state.chat_open = True
@@ -5060,6 +5250,165 @@ def render_faq():
 
 
 # ══════════════════════════════════════════════════════════════════
+#  SUPPORT QUICK REFERENCE PAGE
+# ══════════════════════════════════════════════════════════════════
+def render_support_qna():
+    render_topnav(show_settings_btn=True, show_back_btn=True)
+
+    sqnas = st.session_state.get("kb_support_qas", [])
+    total = total_sources()
+    has_kb = bool(st.session_state.get("kb_faqs") or st.session_state.get("kb_rlqa_qas"))
+
+    # ── Hero ──────────────────────────────────────────────────────
+    n_cats = len(set(f["category"] for f in sqnas)) if sqnas else 0
+    st.markdown(
+        f'<div class="lp-hero"><div class="lp-hero-inner">'
+        f'<div class="lp-eyebrow"><span class="dot"></span>Convin Klaro &nbsp;&middot;&nbsp; Support Quick Reference</div>'
+        f'<div class="lp-title">Support <span class="grad">Quick Sheet</span></div>'
+        f'<div class="lp-sub">One-page crisp Q&amp;A for support agents — short, direct answers from all knowledge sources.</div>'
+        f'<div class="lp-pills">'
+        f'<span class="lp-pill lp-pill-violet">&#10022; {len(sqnas):,} Q&amp;As</span>'
+        f'<span class="lp-pill lp-pill-pink">&#128193; {n_cats} Categories</span>'
+        f'<span class="lp-pill lp-pill-cyan">&#9889; Support-Ready</span>'
+        f'<span class="lp-pill lp-pill-green">&#10003; {total} KB Sources</span>'
+        f'</div>'
+        f'</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Action row ────────────────────────────────────────────────
+    ac1, ac2 = st.columns([3, 2])
+    with ac1:
+        gen_btn = st.button(
+            "✨ Generate Support Sheet" if not sqnas else "🔄 Regenerate Support Sheet",
+            type="primary", use_container_width=True,
+            disabled=(total == 0 and not has_kb),
+        )
+    with ac2:
+        if sqnas and st.button("🗑️ Clear Sheet", use_container_width=True):
+            st.session_state.kb_support_qas = []
+            save_kb(); st.rerun()
+
+    if total == 0 and not has_kb:
+        st.info("Add knowledge sources from Settings, or generate the main Knowledge Base first.")
+
+    if gen_btn:
+        prog_ph   = st.empty()
+        status_ph = st.empty()
+        status_ph.markdown(
+            "<span style='color:#A78BFA;font-size:0.85rem'>"
+            "🤖 Building crisp support sheet from all knowledge sources…</span>",
+            unsafe_allow_html=True,
+        )
+        prog_ph.progress(0.05)
+
+        def _sqna_progress(pct, label):
+            prog_ph.progress(pct)
+            status_ph.markdown(
+                f"<span style='color:#A78BFA;font-size:0.85rem'>{label}</span>",
+                unsafe_allow_html=True,
+            )
+
+        try:
+            new_sqnas = generate_support_qas(progress_cb=_sqna_progress)
+            prog_ph.progress(1.0)
+            if new_sqnas:
+                st.session_state.kb_support_qas = new_sqnas
+                save_kb()
+                prog_ph.empty()
+                status_ph.success(
+                    f"✅ {len(new_sqnas)} support Q&As ready — short, crisp, support-agent style!"
+                )
+                st.rerun()
+            else:
+                prog_ph.empty()
+                status_ph.warning("No Q&As generated. Try generating the main Knowledge Base first.")
+        except Exception as e:
+            prog_ph.empty()
+            status_ph.error(f"Error: {e}")
+
+    if not sqnas:
+        st.markdown("""
+        <div class="no-faq">
+          <div class="no-faq-icon">📋</div>
+          <h3>No Support Sheet Yet</h3>
+          <p>Click "Generate Support Sheet" to build crisp, agent-ready Q&amp;As from all sources.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        _render_chat_float()
+        return
+
+    # ── Search + category filter ──────────────────────────────────
+    sc, cc = st.columns([5, 2])
+    with sc:
+        search = st.text_input(
+            "search", placeholder="🔍  Search questions or answers…",
+            label_visibility="collapsed", key="sqna_search",
+        )
+    with cc:
+        all_cats = ["All Categories"] + sorted(set(f["category"] for f in sqnas))
+        cat_filter = st.selectbox("Category", all_cats, label_visibility="collapsed", key="sqna_cat")
+
+    # ── Filter ────────────────────────────────────────────────────
+    active = list(sqnas)
+    if cat_filter != "All Categories":
+        active = [f for f in active if f["category"] == cat_filter]
+    slc = search.lower().strip() if search else ""
+    if slc:
+        active = [
+            f for f in active
+            if slc in f.get("question", "").lower() or slc in f.get("answer", "").lower()
+        ]
+
+    if search or cat_filter != "All Categories":
+        st.markdown(
+            f'<div style="font-size:0.82rem;color:#A78BFA;margin:4px 0 12px">'
+            f'&#128269; <b>{len(active):,}</b> results'
+            + (f' for &ldquo;{search}&rdquo;' if search else "")
+            + (f' in <b>{cat_filter}</b>' if cat_filter != "All Categories" else "")
+            + '</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ── Card grid (always-visible, no expanders) ──────────────────
+    def _src_tag(faq: dict) -> str:
+        cat = faq.get("category", "")
+        if cat.startswith("WhatsApp:"):
+            return '<span class="sqna-tag sqna-tag-wa">💬 WhatsApp</span>'
+        if cat.startswith("Client Learnings:"):
+            return '<span class="sqna-tag sqna-tag-rlqa">👤 Client</span>'
+        return '<span class="sqna-tag sqna-tag-kb">📄 KB</span>'
+
+    cards_html = '<div class="sqna-grid">'
+    for faq in active:
+        q   = faq.get("question", "").replace("<", "&lt;").replace(">", "&gt;")
+        a   = faq.get("answer",   "").replace("<", "&lt;").replace(">", "&gt;")
+        cat = faq.get("category", "").replace("<", "&lt;").replace(">", "&gt;")
+        tag = _src_tag(faq)
+        if slc:
+            def hl(text, term=slc):
+                return re.sub(
+                    f"({re.escape(term)})",
+                    r'<mark style="background:rgba(124,58,237,0.28);border-radius:3px;'
+                    r'padding:0 2px;color:#EEF0FA">\1</mark>',
+                    text, flags=re.IGNORECASE,
+                )
+            q = hl(q); a = hl(a)
+        cards_html += (
+            f'<div class="sqna-card">'
+            f'{tag}'
+            f'<div class="sqna-q">{q}</div>'
+            f'<div class="sqna-a">{a}</div>'
+            f'<div class="sqna-cat-pill">📂 {cat}</div>'
+            f'</div>'
+        )
+    cards_html += '</div>'
+    st.markdown(cards_html, unsafe_allow_html=True)
+
+    _render_chat_float()
+
+
+# ══════════════════════════════════════════════════════════════════
 #  ROUTER
 # ══════════════════════════════════════════════════════════════════
 if st.session_state.page == "chat":
@@ -5068,5 +5417,7 @@ elif st.session_state.page == "settings":
     render_settings()
 elif st.session_state.page == "client_qa":
     render_client_qa()
+elif st.session_state.page == "support_qna":
+    render_support_qna()
 else:
     render_faq()
