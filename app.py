@@ -5,7 +5,7 @@ AI-powered knowledge & support intelligence platform
 
 import streamlit as st
 import streamlit.components.v1 as _components
-import json, re, os, base64, zipfile, io, uuid, time
+import json, re, os, base64, zipfile, io, uuid, time, csv
 import psycopg2, psycopg2.extras
 from datetime import datetime
 from urllib.parse import urljoin, urlparse
@@ -5280,6 +5280,47 @@ def render_faq():
 
 
 # ══════════════════════════════════════════════════════════════════
+#  EXPORT HELPERS
+# ══════════════════════════════════════════════════════════════════
+def export_qnas_csv(qnas: list[dict]) -> str:
+    """Export Q&As to CSV format."""
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["Category", "Question", "Answer"])
+    writer.writeheader()
+    for qna in qnas:
+        writer.writerow({
+            "Category": qna.get("category", ""),
+            "Question": qna.get("question", ""),
+            "Answer": qna.get("answer", ""),
+        })
+    return output.getvalue()
+
+def export_qnas_json(qnas: list[dict]) -> str:
+    """Export Q&As to JSON format."""
+    return json.dumps(qnas, indent=2)
+
+def export_qnas_markdown(qnas: list[dict]) -> str:
+    """Export Q&As to Markdown format with support agent style."""
+    lines = ["# Support Q&A Reference Sheet\n"]
+    categories = {}
+    for qna in qnas:
+        cat = qna.get("category", "Uncategorized")
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append(qna)
+
+    for cat in sorted(categories.keys()):
+        lines.append(f"## 📂 {cat}\n")
+        for qna in categories[cat]:
+            q = qna.get("question", "")
+            a = qna.get("answer", "")
+            lines.append(f"**Q: {q}**\n")
+            lines.append(f"A: {a}\n")
+        lines.append("")
+
+    return "\n".join(lines)
+
+# ══════════════════════════════════════════════════════════════════
 #  SUPPORT QUICK REFERENCE PAGE
 # ══════════════════════════════════════════════════════════════════
 def render_support_qna():
@@ -5307,7 +5348,7 @@ def render_support_qna():
     )
 
     # ── Action row ────────────────────────────────────────────────
-    ac1, ac2 = st.columns([3, 2])
+    ac1, ac2, ac3, ac4 = st.columns([2.5, 1.2, 1.2, 1.2])
     with ac1:
         gen_btn = st.button(
             "✨ Generate Support Sheet" if not sqnas else "🔄 Regenerate Support Sheet",
@@ -5315,7 +5356,19 @@ def render_support_qna():
             disabled=(total == 0 and not has_kb),
         )
     with ac2:
-        if sqnas and st.button("🗑️ Clear Sheet", use_container_width=True):
+        if sqnas:
+            st.download_button(
+                "📥 CSV", export_qnas_csv(sqnas),
+                file_name="support-qa.csv", mime="text/csv", use_container_width=True
+            )
+    with ac3:
+        if sqnas:
+            st.download_button(
+                "📋 Markdown", export_qnas_markdown(sqnas),
+                file_name="support-qa.md", mime="text/markdown", use_container_width=True
+            )
+    with ac4:
+        if sqnas and st.button("🗑️ Clear", use_container_width=True):
             st.session_state.kb_support_qas = []
             save_kb(); st.rerun()
 
@@ -5399,6 +5452,19 @@ def render_support_qna():
             + '</div>',
             unsafe_allow_html=True,
         )
+
+        # Download filtered results
+        dl1, dl2, _ = st.columns([1.2, 1.2, 3])
+        with dl1:
+            st.download_button(
+                "📥 CSV", export_qnas_csv(active),
+                file_name="support-qa-filtered.csv", mime="text/csv", use_container_width=True, key="dl_csv_filtered"
+            )
+        with dl2:
+            st.download_button(
+                "📋 Markdown", export_qnas_markdown(active),
+                file_name="support-qa-filtered.md", mime="text/markdown", use_container_width=True, key="dl_md_filtered"
+            )
 
     # ── Card grid (always-visible, no expanders) ──────────────────
     def _src_tag(faq: dict) -> str:
