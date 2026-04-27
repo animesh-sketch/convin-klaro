@@ -1167,6 +1167,14 @@ div[data-testid="stHorizontalBlock"]:has(button[key="back_btn"]) .stButton > but
     border-top: 1px solid rgba(255,255,255,0.05);
     padding-top: 6px;
 }
+.sqna-steps { display:flex; flex-direction:column; gap:5px; margin-top:2px; }
+.sqna-step  { display:flex; gap:8px; align-items:flex-start; font-size:0.81rem; color:#94A3B8; line-height:1.5; }
+.sqna-step-n {
+    flex-shrink:0; width:19px; height:19px; border-radius:50%;
+    background:rgba(99,102,241,0.20); color:#A78BFA;
+    font-size:0.66rem; font-weight:700;
+    display:flex; align-items:center; justify-content:center; margin-top:1px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2012,49 +2020,41 @@ def generate_faqs(progress_cb=None) -> list[dict]:
 
 
 def generate_support_qas(progress_cb=None) -> list[dict]:
-    """Build a support-agent quick-reference sheet from ALL knowledge sources.
-
-    Rewrites answers from existing Q&As (kb_faqs, kb_rlqa_qas, kb_client_qas)
-    to 1–2 sentences max. Falls back to raw extraction if no Q&As exist yet.
-    """
+    """Build a step-wise support quick-reference sheet from ALL knowledge sources."""
     client = get_client()
 
     # ── Collect all existing Q&As from every source ───────────────
     all_existing: list[dict] = []
-
-    faqs = st.session_state.get("kb_faqs", [])
-    all_existing.extend(faqs)
-
-    rlqa = st.session_state.get("kb_rlqa_qas", [])
-    all_existing.extend(rlqa)
-
-    client_qas = st.session_state.get("kb_client_qas", {})
-    for qas in client_qas.values():
+    all_existing.extend(st.session_state.get("kb_faqs", []))
+    all_existing.extend(st.session_state.get("kb_rlqa_qas", []))
+    for qas in st.session_state.get("kb_client_qas", {}).values():
         all_existing.extend(qas)
 
-    CRISP_RULES = (
+    STEP_RULES = (
         "Rules:\n"
-        "• Each answer MUST be 1–2 sentences max. No bullet lists. No headers.\n"
-        "• Tone: support agent — direct, confident, helpful.\n"
-        "• Start with the answer. Never open with 'Yes', 'Sure', or 'Great question'.\n"
-        "• Summarise any process into one sentence.\n"
+        "• For PROCESS / HOW-TO questions: use numbered steps in the answer.\n"
+        '  Format steps as: "1. Do X\\n2. Do Y\\n3. Do Z"\n'
+        "• For FACTUAL / WHAT-IS questions: 1–2 sentences, direct.\n"
+        "• For YES/NO questions: start Yes/No, then one sentence.\n"
+        "• Tone: support agent — confident, helpful, no filler.\n"
         "• Preserve product names and proper nouns exactly.\n"
         "• Return ONLY a raw JSON array (no markdown fences, no extra text):\n"
-        '[\n  {"category":"Cat","question":"Q?","answer":"Crisp 1-line answer."},\n  ...\n]\n'
+        '[\n  {"category":"Cat","question":"Q?","answer":"Answer here."},\n  ...\n]\n'
     )
 
     result: list[dict] = []
+    errors: list[str] = []
 
     if all_existing:
-        # ── Rewrite in batches of 80 ──────────────────────────────
-        BATCH = 80
+        # ── Format in batches of 50 ───────────────────────────────
+        BATCH = 50
         batches = [all_existing[i:i + BATCH] for i in range(0, len(all_existing), BATCH)]
         total_b = len(batches)
 
         for bi, batch in enumerate(batches):
             pct = 0.05 + (bi / total_b) * 0.85
             if progress_cb:
-                progress_cb(pct, f"✍️ Batch {bi+1}/{total_b} — rewriting {len(batch)} answers as support agent…")
+                progress_cb(pct, f"✍️ Batch {bi+1}/{total_b} — formatting {len(batch)} Q&As…")
 
             qa_block = json.dumps(
                 [{"category": q.get("category", "General"),
@@ -2064,36 +2064,40 @@ def generate_support_qas(progress_cb=None) -> list[dict]:
                 indent=2,
             )
             prompt = (
-                "You are a support agent editor. Rewrite every answer to be short, crisp, and direct.\n\n"
-                + CRISP_RULES
-                + "\nQ&As to rewrite:\n" + qa_block
+                "You are a support agent editor building a quick-reference sheet.\n"
+                "Format every answer — use numbered steps for processes, short sentences for facts.\n\n"
+                + STEP_RULES
+                + "\nQ&As to format:\n" + qa_block
             )
             try:
                 result.extend(_faq_call(client, prompt))
-            except Exception:
-                pass
+            except Exception as e:
+                errors.append(f"Batch {bi+1}: {e}")
 
     else:
-        # ── No Q&As yet — extract from raw docs/links ─────────────
+        # ── No Q&As yet — generate from raw docs/links ────────────
         ctx, _ = build_context()
-        if ctx.strip():
-            if progress_cb:
-                progress_cb(0.20, "🔍 Extracting support Q&As from knowledge base…")
-            prompt = (
-                "You are extracting support-agent Q&As from the knowledge base.\n"
-                "Focus on questions a customer or support agent would actually ask.\n\n"
-                + CRISP_RULES
-                + "\nKNOWLEDGE BASE:\n" + ctx
-            )
-            try:
-                result.extend(_faq_call(client, prompt))
-            except Exception:
-                pass
+        if not ctx.strip():
+            raise ValueError("No knowledge base found. Add documents or links in Settings first.")
+        if progress_cb:
+            progress_cb(0.20, "🔍 Generating step-wise Q&As from knowledge base…")
+        prompt = (
+            "You are generating a support quick-reference sheet from a knowledge base.\n"
+            "Extract every important Q&A a support agent needs.\n\n"
+            + STEP_RULES
+            + "\nKNOWLEDGE BASE:\n" + ctx
+        )
+        try:
+            result.extend(_faq_call(client, prompt))
+        except Exception as e:
+            errors.append(str(e))
+
+    if errors and not result:
+        raise ValueError(f"Generation failed: {'; '.join(errors)}")
 
     if progress_cb:
         progress_cb(0.95, "✨ Finalising support sheet…")
 
-    # Deduplicate by question
     seen: set[str] = set()
     deduped: list[dict] = []
     for f in result:
@@ -5379,12 +5383,33 @@ def render_support_qna():
             return '<span class="sqna-tag sqna-tag-rlqa">👤 Client</span>'
         return '<span class="sqna-tag sqna-tag-kb">📄 KB</span>'
 
+    def _answer_html(raw: str) -> str:
+        """Render answer as numbered steps or plain text."""
+        text = raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        if not lines:
+            return ""
+        step_re = re.compile(r"^\d+[\.\)]\s+")
+        is_steps = len(lines) > 1 and all(step_re.match(l) for l in lines)
+        if is_steps:
+            items = "".join(
+                f'<div class="sqna-step">'
+                f'<span class="sqna-step-n">{i+1}</span>'
+                f'{step_re.sub("", l)}'
+                f'</div>'
+                for i, l in enumerate(lines)
+            )
+            return f'<div class="sqna-steps">{items}</div>'
+        return "<br>".join(lines)
+
     cards_html = '<div class="sqna-grid">'
     for faq in active:
-        q   = faq.get("question", "").replace("<", "&lt;").replace(">", "&gt;")
-        a   = faq.get("answer",   "").replace("<", "&lt;").replace(">", "&gt;")
-        cat = faq.get("category", "").replace("<", "&lt;").replace(">", "&gt;")
-        tag = _src_tag(faq)
+        q_raw = faq.get("question", "")
+        a_raw = faq.get("answer",   "")
+        cat   = faq.get("category", "").replace("<", "&lt;").replace(">", "&gt;")
+        tag   = _src_tag(faq)
+        q_esc = q_raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        a_html = _answer_html(a_raw)
         if slc:
             def hl(text, term=slc):
                 return re.sub(
@@ -5393,12 +5418,13 @@ def render_support_qna():
                     r'padding:0 2px;color:#EEF0FA">\1</mark>',
                     text, flags=re.IGNORECASE,
                 )
-            q = hl(q); a = hl(a)
+            q_esc  = hl(q_esc)
+            a_html = hl(a_html)
         cards_html += (
             f'<div class="sqna-card">'
             f'{tag}'
-            f'<div class="sqna-q">{q}</div>'
-            f'<div class="sqna-a">{a}</div>'
+            f'<div class="sqna-q">{q_esc}</div>'
+            f'<div class="sqna-a">{a_html}</div>'
             f'<div class="sqna-cat-pill">📂 {cat}</div>'
             f'</div>'
         )
