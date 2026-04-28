@@ -5120,9 +5120,7 @@ def render_faq():
     )
 
     # ── Stat cards ────────────────────────────────────────────────
-    sqna_count = len(st.session_state.get("kb_support_qas", []))
-    cards_before = ["FAQ", "Q&A", "Use Cases"]
-    cards_after  = ["More Q&A", "All"]
+    cards_all = ["FAQ", "Q&A", "Use Cases", "More Q&A", "All"]
 
     def _stat_card(k):
         return (
@@ -5133,29 +5131,17 @@ def render_faq():
             f'</div>'
         )
 
-    sqna_card = (
-        f'<div style="background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(139,92,246,0.12));'
-        f'border:1px solid rgba(99,102,241,0.35);border-radius:10px;'
-        f'padding:12px 18px;flex:1;min-width:100px;text-align:center;cursor:pointer" '
-        f'title="Open Support Sheet">'
-        f'<div style="font-size:1.4rem;font-weight:800;color:#A78BFA">{sqna_count:,}</div>'
-        f'<div style="font-size:0.72rem;color:#A78BFA;margin-top:3px;font-weight:600">📋 Support Sheet</div>'
-        f'</div>'
-    )
-
     st.markdown(
-        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 8px">'
-        + "".join(_stat_card(k) for k in cards_before)
-        + sqna_card
-        + "".join(_stat_card(k) for k in cards_after)
+        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px">'
+        + "".join(_stat_card(k) for k in cards_all)
         + "</div>",
         unsafe_allow_html=True,
     )
 
-    # ── Support Sheet button (below the card it mirrors) ─────────
+    # ── Support Q&A One-Pager button ──────────────────────────────
     _, _mid, _ = st.columns([3, 2, 3])
     with _mid:
-        if st.button("📋 Open Support Sheet →", key="faq_sqna_btn", use_container_width=True):
+        if st.button("📋 Support Q&A →", key="faq_sqna_btn", use_container_width=True):
             st.session_state.page = "support_qna"
             st.rerun()
     st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
@@ -5283,7 +5269,6 @@ def render_faq():
 #  EXPORT HELPERS
 # ══════════════════════════════════════════════════════════════════
 def export_qnas_csv(qnas: list[dict]) -> str:
-    """Export Q&As to CSV format."""
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=["Category", "Question", "Answer"])
     writer.writeheader()
@@ -5296,29 +5281,332 @@ def export_qnas_csv(qnas: list[dict]) -> str:
     return output.getvalue()
 
 def export_qnas_json(qnas: list[dict]) -> str:
-    """Export Q&As to JSON format."""
     return json.dumps(qnas, indent=2)
 
 def export_qnas_markdown(qnas: list[dict]) -> str:
-    """Export Q&As to Markdown format with support agent style."""
     lines = ["# Support Q&A Reference Sheet\n"]
-    categories = {}
+    categories: dict[str, list] = {}
     for qna in qnas:
         cat = qna.get("category", "Uncategorized")
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append(qna)
-
+        categories.setdefault(cat, []).append(qna)
     for cat in sorted(categories.keys()):
         lines.append(f"## 📂 {cat}\n")
         for qna in categories[cat]:
-            q = qna.get("question", "")
-            a = qna.get("answer", "")
-            lines.append(f"**Q: {q}**\n")
-            lines.append(f"A: {a}\n")
+            lines.append(f"**Q: {qna.get('question', '')}**\n")
+            lines.append(f"A: {qna.get('answer', '')}\n")
         lines.append("")
-
     return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  SUPPORT Q&A ONE-PAGER — component builder
+# ══════════════════════════════════════════════════════════════════
+def _build_sqna_html(faqs: list[dict]) -> str:
+    """Return a self-contained HTML string for embedding via _components.html()."""
+    import html as _html
+
+    # group by category
+    cat_groups: dict[str, list[dict]] = {}
+    for item in faqs:
+        cat = item.get("category", "General")
+        cat_groups.setdefault(cat, []).append(item)
+
+    cat_order = sorted(cat_groups.keys(), key=lambda c: (
+        0 if not c.startswith(("WhatsApp:", "Client Learnings:")) else
+        1 if not c.startswith("Client Learnings:") else 2,
+        -len(cat_groups[c])
+    ))
+
+    def _section(cat):
+        if cat.startswith("WhatsApp:"):      return "whatsapp"
+        if cat.startswith("Client Learnings:"): return "learnings"
+        return "general"
+
+    def _short(cat):
+        return cat.replace("WhatsApp: ", "").replace("Client Learnings: ", "")
+
+    def _cid(cat):
+        return re.sub(r"[^a-z0-9]+", "-", cat.lower()).strip("-")
+
+    def _answer_body(raw: str) -> str:
+        lines = [l.strip() for l in raw.strip().split("\n") if l.strip()]
+        if not lines:
+            return ""
+        step_re = re.compile(r"^\d+[\.\)]\s+(.+)$")
+        bull_re = re.compile(r"^[•\-\*]\s+(.+)$")
+        if len(lines) > 1 and all(step_re.match(l) for l in lines):
+            items = "".join(f"<li>{_html.escape(step_re.match(l).group(1))}</li>" for l in lines)
+            return f"<ol>{items}</ol>"
+        if len(lines) > 1 and all(bull_re.match(l) for l in lines):
+            items = "".join(f"<li>{_html.escape(bull_re.match(l).group(1))}</li>" for l in lines)
+            return f"<ul>{items}</ul>"
+        return "".join(f"<p>{_html.escape(l)}</p>" for l in lines)
+
+    # TOC
+    toc_parts = []
+    prev_sec = None
+    sec_labels = {"general": "Product &amp; General", "whatsapp": "WhatsApp", "learnings": "Client Learnings"}
+    for cat in cat_order:
+        sec = _section(cat)
+        if sec != prev_sec:
+            toc_parts.append(f'<div class="toc-lbl">{sec_labels[sec]}</div>')
+            prev_sec = sec
+        toc_parts.append(
+            f'<a href="#{_cid(cat)}" class="toc-a" data-id="{_cid(cat)}">'
+            f'{_html.escape(_short(cat))}'
+            f'<span class="toc-n">{len(cat_groups[cat])}</span></a>'
+        )
+
+    # Cards
+    card_parts = []
+    badge_map = {
+        "whatsapp": '<span class="badge badge-wa">WhatsApp</span>',
+        "learnings": '<span class="badge badge-cl">Client</span>',
+        "general":   '<span class="badge badge-gn">Product</span>',
+    }
+    for cat in cat_order:
+        cid = _cid(cat)
+        sec = _section(cat)
+        card_parts.append(
+            f'<section id="{cid}" class="cat-sec" data-id="{cid}">'
+            f'<div class="cat-hdr">{badge_map[sec]}'
+            f'<h2 class="cat-ttl">{_html.escape(_short(cat))}</h2>'
+            f'<span class="cat-cnt">{len(cat_groups[cat])}</span></div>'
+            f'<div class="qa-grid">'
+        )
+        for item in cat_groups[cat]:
+            q = item.get("question", "").strip()
+            a = item.get("answer",   "").strip()
+            if not q:
+                continue
+            card_parts.append(
+                f'<div class="qa-card"'
+                f' data-q="{_html.escape(q.lower())}"'
+                f' data-a="{_html.escape(a.lower())}">'
+                f'<div class="qa-q">{_html.escape(q)}</div>'
+                f'<div class="qa-a">{_answer_body(a) or "<p><em>—</em></p>"}</div>'
+                f'</div>'
+            )
+        card_parts.append('</div></section>')
+
+    toc_html   = "\n".join(toc_parts)
+    cards_html = "\n".join(card_parts)
+    n_cats     = len(cat_order)
+    n_faqs     = len(faqs)
+
+    return f"""<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
+:root{{
+  --bg:#0B0F1A;--s1:#111827;--s2:#1A2035;
+  --acc:#6366F1;--acl:#818CF8;
+  --t1:#E5E7EB;--t2:#94A3B8;--t3:#475569;
+  --brd:rgba(255,255,255,0.06);--bacc:rgba(99,102,241,0.22);
+  --sw:240px;
+}}
+html{{scroll-behavior:smooth;height:100%}}
+body{{font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;
+  background:var(--bg);color:var(--t1);font-size:13px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;height:100%;overflow:hidden}}
+a{{color:inherit;text-decoration:none}}
+
+/* toolbar */
+.toolbar{{
+  position:fixed;top:0;left:0;right:0;z-index:50;height:48px;
+  background:rgba(11,15,26,0.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--brd);
+  display:flex;align-items:center;gap:10px;padding:0 16px;
+}}
+.tb-title{{font-size:.85rem;font-weight:700;white-space:nowrap;color:var(--t1)}}
+.tb-badge{{font-size:.62rem;font-weight:600;padding:2px 8px;border-radius:20px;
+  background:rgba(99,102,241,0.12);border:1px solid var(--bacc);color:var(--acl)}}
+.tb-search{{flex:1;position:relative}}
+.tb-search input{{
+  width:100%;height:32px;padding:0 10px 0 30px;
+  background:var(--s2);border:1px solid var(--brd);border-radius:7px;
+  color:var(--t1);font-size:.8rem;outline:none;
+  transition:border-color .15s
+}}
+.tb-search input:focus{{border-color:var(--acl)}}
+.tb-search input::placeholder{{color:var(--t3)}}
+.tb-search .ico{{position:absolute;left:9px;top:50%;transform:translateY(-50%);
+  color:var(--t3);font-size:13px;pointer-events:none}}
+.tb-stats{{display:flex;gap:8px;white-space:nowrap}}
+.chip{{font-size:.68rem;color:var(--t2);background:var(--s2);
+  border:1px solid var(--brd);padding:3px 9px;border-radius:20px}}
+.chip b{{color:var(--acl)}}
+.dl-btn{{
+  display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;
+  background:linear-gradient(135deg,var(--acc),#8B5CF6);
+  color:#fff;font-size:.75rem;font-weight:600;border:none;border-radius:7px;
+  cursor:pointer;white-space:nowrap;transition:opacity .15s
+}}
+.dl-btn:hover{{opacity:.85}}
+
+/* layout */
+.layout{{display:flex;position:fixed;top:48px;left:0;right:0;bottom:0}}
+
+/* sidebar */
+.sidebar{{
+  width:var(--sw);min-width:var(--sw);height:100%;
+  overflow-y:auto;overflow-x:hidden;
+  background:var(--s1);border-right:1px solid var(--brd);
+  padding:10px 0 24px;
+  scrollbar-width:thin;scrollbar-color:var(--s2) transparent;
+}}
+.sidebar::-webkit-scrollbar{{width:3px}}
+.sidebar::-webkit-scrollbar-thumb{{background:var(--s2);border-radius:3px}}
+.toc-lbl{{font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--t3);padding:12px 14px 3px}}
+.toc-a{{display:flex;align-items:center;justify-content:space-between;
+  padding:5px 14px;font-size:.74rem;color:var(--t2);
+  border-left:2px solid transparent;transition:all .1s;gap:5px}}
+.toc-a:hover{{color:var(--t1);background:var(--s2)}}
+.toc-a.active{{color:var(--acl);border-left-color:var(--acc);
+  background:rgba(99,102,241,0.08);font-weight:500}}
+.toc-n{{font-size:.64rem;color:var(--t3);background:var(--s2);
+  border-radius:10px;padding:1px 5px;flex-shrink:0}}
+
+/* main */
+.main{{flex:1;min-width:0;overflow-y:auto;padding:20px 22px 40px;
+  scrollbar-width:thin;scrollbar-color:var(--s2) transparent}}
+.main::-webkit-scrollbar{{width:5px}}
+.main::-webkit-scrollbar-thumb{{background:var(--s2);border-radius:4px}}
+
+#no-results{{display:none;padding:40px 0;text-align:center;
+  color:var(--t2);font-size:.88rem}}
+
+.cat-sec{{margin-bottom:32px}}
+.cat-sec.hidden{{display:none}}
+.cat-hdr{{display:flex;align-items:center;gap:8px;
+  margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--brd)}}
+.cat-ttl{{font-size:.92rem;font-weight:700;color:var(--t1);flex:1}}
+.cat-cnt{{font-size:.66rem;color:var(--t3);background:var(--s2);
+  padding:2px 7px;border-radius:10px}}
+
+.badge{{font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  padding:2px 6px;border-radius:4px;flex-shrink:0}}
+.badge-wa{{background:rgba(16,185,129,.15);color:#6EE7B7;border:1px solid rgba(16,185,129,.3)}}
+.badge-cl{{background:rgba(236,72,153,.12);color:#F9A8D4;border:1px solid rgba(236,72,153,.25)}}
+.badge-gn{{background:rgba(99,102,241,.12);color:#A78BFA;border:1px solid rgba(99,102,241,.25)}}
+
+.qa-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}}
+.qa-card{{background:var(--s1);border:1px solid var(--brd);border-radius:9px;
+  padding:12px 14px;transition:border-color .12s}}
+.qa-card:hover{{border-color:var(--bacc)}}
+.qa-card.hidden{{display:none}}
+.qa-q{{font-size:.78rem;font-weight:600;color:var(--acl);margin-bottom:7px;line-height:1.4}}
+.qa-a{{font-size:.75rem;color:var(--t2);line-height:1.6}}
+.qa-a p{{margin-bottom:3px}}.qa-a p:last-child{{margin-bottom:0}}
+.qa-a ol,.qa-a ul{{padding-left:16px;margin:0}}
+.qa-a li{{margin-bottom:2px}}
+.qa-a ol li{{list-style:decimal}}.qa-a ul li{{list-style:disc}}
+mark{{background:rgba(124,58,237,.3);border-radius:3px;padding:0 2px;color:#EEF0FA}}
+</style></head><body>
+
+<div class="toolbar">
+  <span class="tb-title">Support Q&amp;A</span>
+  <span class="tb-badge">One-Pager</span>
+  <div class="tb-search">
+    <span class="ico">&#128269;</span>
+    <input type="search" id="srch" placeholder="Search questions and answers…" autocomplete="off">
+  </div>
+  <div class="tb-stats">
+    <div class="chip"><b>{n_faqs:,}</b> Q&amp;As</div>
+    <div class="chip"><b>{n_cats}</b> cats</div>
+  </div>
+  <button class="dl-btn" onclick="dlPage()">&#8595; Download</button>
+</div>
+
+<div class="layout">
+  <aside class="sidebar" id="sb">{toc_html}</aside>
+  <div class="main" id="mn">
+    <div id="no-results">No Q&amp;As match your search.</div>
+    {cards_html}
+  </div>
+</div>
+
+<script>
+(function(){{
+  const srch=document.getElementById('srch');
+  const secs=Array.from(document.querySelectorAll('.cat-sec'));
+  const cards=Array.from(document.querySelectorAll('.qa-card'));
+  const links=Array.from(document.querySelectorAll('.toc-a'));
+  const noRes=document.getElementById('no-results');
+  const mn=document.getElementById('mn');
+
+  function esc(s){{return s.replace(/[.*+?^${{}}()|[\\]\\\\]/g,'\\\\$&')}}
+  function hl(txt,t){{
+    return txt.replace(new RegExp('('+esc(t)+')','gi'),
+      '<mark>$1</mark>');
+  }}
+
+  cards.forEach(c=>{{
+    c.dataset.qo=c.querySelector('.qa-q').innerHTML;
+    c.dataset.ao=c.querySelector('.qa-a').innerHTML;
+  }});
+
+  srch.addEventListener('input',function(){{
+    const t=this.value.toLowerCase().trim();
+    let vis=0;
+    secs.forEach(sec=>{{
+      let sc=0;
+      sec.querySelectorAll('.qa-card').forEach(card=>{{
+        const m=!t||card.dataset.q.includes(t)||card.dataset.a.includes(t);
+        card.classList.toggle('hidden',!m);
+        if(m){{
+          sc++;
+          if(t){{
+            card.querySelector('.qa-q').innerHTML=hl(card.dataset.qo,t);
+            card.querySelector('.qa-a').innerHTML=hl(card.dataset.ao,t);
+          }} else {{
+            card.querySelector('.qa-q').innerHTML=card.dataset.qo;
+            card.querySelector('.qa-a').innerHTML=card.dataset.ao;
+          }}
+        }}
+      }});
+      sec.classList.toggle('hidden',sc===0);
+      if(sc>0) vis++;
+    }});
+    noRes.style.display=vis===0?'block':'none';
+  }});
+
+  const obs=new IntersectionObserver(entries=>{{
+    entries.forEach(e=>{{
+      const lk=document.querySelector('.toc-a[data-id="'+e.target.id+'"]');
+      if(!lk) return;
+      if(e.isIntersecting){{
+        links.forEach(l=>l.classList.remove('active'));
+        lk.classList.add('active');
+        lk.scrollIntoView({{block:'nearest',behavior:'smooth'}});
+      }}
+    }});
+  }},{{root:mn,rootMargin:'-10% 0px -75% 0px'}});
+  secs.forEach(s=>obs.observe(s));
+
+  links.forEach(lk=>lk.addEventListener('click',function(e){{
+    e.preventDefault();
+    const t=document.getElementById(this.dataset.id);
+    if(t) mn.scrollTo({{top:t.offsetTop-10,behavior:'smooth'}});
+  }}));
+}})();
+
+function dlPage(){{
+  const btn=document.querySelector('.dl-btn');
+  btn.textContent='Preparing…';
+  const html='<!DOCTYPE html>\\n'+document.documentElement.outerHTML;
+  const b=new Blob([html],{{type:'text/html;charset=utf-8'}});
+  const u=URL.createObjectURL(b);
+  const a=document.createElement('a');
+  a.href=u;a.download='convin-support-qna.html';
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(u);
+  setTimeout(()=>{{btn.innerHTML='&#8595; Download';btn.style.opacity='1';}},1200);
+}}
+</script></body></html>"""
+
 
 # ══════════════════════════════════════════════════════════════════
 #  SUPPORT QUICK REFERENCE PAGE
@@ -5326,204 +5614,20 @@ def export_qnas_markdown(qnas: list[dict]) -> str:
 def render_support_qna():
     render_topnav(show_settings_btn=True, show_back_btn=True)
 
-    sqnas = st.session_state.get("kb_support_qas", [])
-    total = total_sources()
-    has_kb = bool(st.session_state.get("kb_faqs") or st.session_state.get("kb_rlqa_qas"))
+    faqs = st.session_state.get("kb_faqs", [])
 
-    # ── Hero ──────────────────────────────────────────────────────
-    n_cats = len(set(f["category"] for f in sqnas)) if sqnas else 0
-    st.markdown(
-        f'<div class="lp-hero"><div class="lp-hero-inner">'
-        f'<div class="lp-eyebrow"><span class="dot"></span>Convin Klaro &nbsp;&middot;&nbsp; Support Quick Reference</div>'
-        f'<div class="lp-title">Support <span class="grad">Quick Sheet</span></div>'
-        f'<div class="lp-sub">One-page crisp Q&amp;A for support agents — short, direct answers from all knowledge sources.</div>'
-        f'<div class="lp-pills">'
-        f'<span class="lp-pill lp-pill-violet">&#10022; {len(sqnas):,} Q&amp;As</span>'
-        f'<span class="lp-pill lp-pill-pink">&#128193; {n_cats} Categories</span>'
-        f'<span class="lp-pill lp-pill-cyan">&#9889; Support-Ready</span>'
-        f'<span class="lp-pill lp-pill-green">&#10003; {total} KB Sources</span>'
-        f'</div>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── Action row ────────────────────────────────────────────────
-    ac1, ac2, ac3, ac4 = st.columns([2.5, 1.2, 1.2, 1.2])
-    with ac1:
-        gen_btn = st.button(
-            "✨ Generate Support Sheet" if not sqnas else "🔄 Regenerate Support Sheet",
-            type="primary", use_container_width=True,
-            disabled=(total == 0 and not has_kb),
-        )
-    with ac2:
-        if sqnas:
-            st.download_button(
-                "📥 CSV", export_qnas_csv(sqnas),
-                file_name="support-qa.csv", mime="text/csv", use_container_width=True
-            )
-    with ac3:
-        if sqnas:
-            st.download_button(
-                "📋 Markdown", export_qnas_markdown(sqnas),
-                file_name="support-qa.md", mime="text/markdown", use_container_width=True
-            )
-    with ac4:
-        if sqnas and st.button("🗑️ Clear", use_container_width=True):
-            st.session_state.kb_support_qas = []
-            save_kb(); st.rerun()
-
-    if total == 0 and not has_kb:
-        st.info("Add knowledge sources from Settings, or generate the main Knowledge Base first.")
-
-    if gen_btn:
-        prog_ph   = st.empty()
-        status_ph = st.empty()
-        status_ph.markdown(
-            "<span style='color:#A78BFA;font-size:0.85rem'>"
-            "🤖 Building crisp support sheet from all knowledge sources…</span>",
-            unsafe_allow_html=True,
-        )
-        prog_ph.progress(0.05)
-
-        def _sqna_progress(pct, label):
-            prog_ph.progress(pct)
-            status_ph.markdown(
-                f"<span style='color:#A78BFA;font-size:0.85rem'>{label}</span>",
-                unsafe_allow_html=True,
-            )
-
-        try:
-            new_sqnas = generate_support_qas(progress_cb=_sqna_progress)
-            prog_ph.progress(1.0)
-            if new_sqnas:
-                st.session_state.kb_support_qas = new_sqnas
-                save_kb()
-                prog_ph.empty()
-                status_ph.success(
-                    f"✅ {len(new_sqnas)} support Q&As ready — short, crisp, support-agent style!"
-                )
-                st.rerun()
-            else:
-                prog_ph.empty()
-                status_ph.warning("No Q&As generated. Try generating the main Knowledge Base first.")
-        except Exception as e:
-            prog_ph.empty()
-            status_ph.error(f"Error: {e}")
-
-    if not sqnas:
+    if not faqs:
         st.markdown("""
         <div class="no-faq">
           <div class="no-faq-icon">📋</div>
-          <h3>No Support Sheet Yet</h3>
-          <p>Click "Generate Support Sheet" to build crisp, agent-ready Q&amp;As from all sources.</p>
+          <h3>No Knowledge Base Yet</h3>
+          <p>Go to Settings, add your documents or links, then click "Generate Answers" on the Knowledge Base page.</p>
         </div>
         """, unsafe_allow_html=True)
         _render_chat_float()
         return
 
-    # ── Search + category filter ──────────────────────────────────
-    sc, cc = st.columns([5, 2])
-    with sc:
-        search = st.text_input(
-            "search", placeholder="🔍  Search questions or answers…",
-            label_visibility="collapsed", key="sqna_search",
-        )
-    with cc:
-        all_cats = ["All Categories"] + sorted(set(f["category"] for f in sqnas))
-        cat_filter = st.selectbox("Category", all_cats, label_visibility="collapsed", key="sqna_cat")
-
-    # ── Filter ────────────────────────────────────────────────────
-    active = list(sqnas)
-    if cat_filter != "All Categories":
-        active = [f for f in active if f["category"] == cat_filter]
-    slc = search.lower().strip() if search else ""
-    if slc:
-        active = [
-            f for f in active
-            if slc in f.get("question", "").lower() or slc in f.get("answer", "").lower()
-        ]
-
-    if search or cat_filter != "All Categories":
-        st.markdown(
-            f'<div style="font-size:0.82rem;color:#A78BFA;margin:4px 0 12px">'
-            f'&#128269; <b>{len(active):,}</b> results'
-            + (f' for &ldquo;{search}&rdquo;' if search else "")
-            + (f' in <b>{cat_filter}</b>' if cat_filter != "All Categories" else "")
-            + '</div>',
-            unsafe_allow_html=True,
-        )
-
-        # Download filtered results
-        dl1, dl2, _ = st.columns([1.2, 1.2, 3])
-        with dl1:
-            st.download_button(
-                "📥 CSV", export_qnas_csv(active),
-                file_name="support-qa-filtered.csv", mime="text/csv", use_container_width=True, key="dl_csv_filtered"
-            )
-        with dl2:
-            st.download_button(
-                "📋 Markdown", export_qnas_markdown(active),
-                file_name="support-qa-filtered.md", mime="text/markdown", use_container_width=True, key="dl_md_filtered"
-            )
-
-    # ── Card grid (always-visible, no expanders) ──────────────────
-    def _src_tag(faq: dict) -> str:
-        cat = faq.get("category", "")
-        if cat.startswith("WhatsApp:"):
-            return '<span class="sqna-tag sqna-tag-wa">💬 WhatsApp</span>'
-        if cat.startswith("Client Learnings:"):
-            return '<span class="sqna-tag sqna-tag-rlqa">👤 Client</span>'
-        return '<span class="sqna-tag sqna-tag-kb">📄 KB</span>'
-
-    def _answer_html(raw: str) -> str:
-        """Render answer as numbered steps or plain text."""
-        text = raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        lines = [l.strip() for l in text.split("\n") if l.strip()]
-        if not lines:
-            return ""
-        step_re = re.compile(r"^\d+[\.\)]\s+")
-        is_steps = len(lines) > 1 and all(step_re.match(l) for l in lines)
-        if is_steps:
-            items = "".join(
-                f'<div class="sqna-step">'
-                f'<span class="sqna-step-n">{i+1}</span>'
-                f'{step_re.sub("", l)}'
-                f'</div>'
-                for i, l in enumerate(lines)
-            )
-            return f'<div class="sqna-steps">{items}</div>'
-        return "<br>".join(lines)
-
-    cards_html = '<div class="sqna-grid">'
-    for faq in active:
-        q_raw = faq.get("question", "")
-        a_raw = faq.get("answer",   "")
-        cat   = faq.get("category", "").replace("<", "&lt;").replace(">", "&gt;")
-        tag   = _src_tag(faq)
-        q_esc = q_raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        a_html = _answer_html(a_raw)
-        if slc:
-            def hl(text, term=slc):
-                return re.sub(
-                    f"({re.escape(term)})",
-                    r'<mark style="background:rgba(124,58,237,0.28);border-radius:3px;'
-                    r'padding:0 2px;color:#EEF0FA">\1</mark>',
-                    text, flags=re.IGNORECASE,
-                )
-            q_esc  = hl(q_esc)
-            a_html = hl(a_html)
-        cards_html += (
-            f'<div class="sqna-card">'
-            f'{tag}'
-            f'<div class="sqna-q">{q_esc}</div>'
-            f'<div class="sqna-a">{a_html}</div>'
-            f'<div class="sqna-cat-pill">📂 {cat}</div>'
-            f'</div>'
-        )
-    cards_html += '</div>'
-    st.markdown(cards_html, unsafe_allow_html=True)
-
-    _render_chat_float()
+    _components.html(_build_sqna_html(faqs), height=900, scrolling=False)
 
 
 # ══════════════════════════════════════════════════════════════════
