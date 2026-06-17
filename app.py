@@ -1706,7 +1706,9 @@ def build_chat_context() -> tuple[str, list[str]]:
 def get_client():
     key = st.secrets.get("ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_API_KEY",""))
     if not key:
-        raise ValueError("ANTHROPIC_API_KEY not configured.")
+        raise ValueError("⚠️ ANTHROPIC_API_KEY is not configured. Ask your admin to set it in Streamlit secrets.")
+    if not key.startswith("sk-ant-"):
+        raise ValueError("⚠️ ANTHROPIC_API_KEY has invalid format (should start with 'sk-ant-'). Check if the key is correct.")
     return anthropic.Anthropic(api_key=key)
 
 def ask_claude(query: str) -> tuple[str, list[str]]:
@@ -1797,7 +1799,8 @@ def ask_claude_stream(query: str, placeholder) -> tuple[str, list[str]]:
     full_text = ""
     last_ui = 0.0
     try:
-        with get_client().messages.stream(
+        client = get_client()
+        with client.messages.stream(
             model="claude-haiku-4-5-20251001",
             max_tokens=350,
             system=system,
@@ -1812,7 +1815,7 @@ def ask_claude_stream(query: str, placeholder) -> tuple[str, list[str]]:
                     last_ui = now
         placeholder.markdown(full_text)
     except Exception as e:
-        full_text = f"⚠️ Error: {e}"
+        full_text = f"⚠️ Error: {type(e).__name__}: {str(e)}"
         placeholder.markdown(full_text)
 
     return full_text, names
