@@ -503,26 +503,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Widgets Grid
-st.markdown('<div class="widgets-grid">', unsafe_allow_html=True)
-
-# ── CHAT WIDGET ──
-st.markdown("""
-<div class="widget-container">
-    <div class="widget-header">
-        <div class="widget-icon">💬</div>
-        <div class="widget-title">Chat Support</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
 col1, col2 = st.columns([1, 1])
 
+# ── CHAT WIDGET ──
 with col1:
-    st.markdown('<div class="chat-messages" id="chat-messages">', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="widget-container">
+        <div class="widget-header">
+            <div class="widget-icon">💬</div>
+            <div class="widget-title">Chat Support</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # Display chat history
-    chat_container = st.container()
-    with chat_container:
+    # Chat messages display
+    st.markdown('<div class="chat-messages">', unsafe_allow_html=True)
+    if st.session_state.chat_messages:
         for msg in st.session_state.chat_messages:
             if msg["role"] == "user":
                 st.markdown(f"""
@@ -536,7 +532,12 @@ with col1:
                     <strong>Support:</strong> {msg["content"]}
                 </div>
                 """, unsafe_allow_html=True)
-
+    else:
+        st.markdown("""
+        <div style="text-align: center; color: #94A3B8; padding: 40px 20px;">
+            <p>Start a conversation...</p>
+        </div>
+        """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # Chat input
@@ -626,8 +627,6 @@ with col2:
             st.session_state.voice_call_active = False
             save_voice_call("user", st.session_state.session_id, st.session_state.voice_call_duration, "completed")
             st.info("Call ended")
-
-st.markdown('</div>', unsafe_allow_html=True)
 
 # ── SETTINGS PANEL ──
 st.markdown("""
