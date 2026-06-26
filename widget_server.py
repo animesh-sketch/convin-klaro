@@ -123,6 +123,11 @@ def home():
     """Home page with widget demo"""
     return render_template('widget_demo.html')
 
+@app.route('/analytics', methods=['GET'])
+def analytics():
+    """Analytics dashboard"""
+    return render_template('analytics.html')
+
 @app.route('/widget', methods=['GET'])
 def widget():
     """Serve the widget HTML"""
