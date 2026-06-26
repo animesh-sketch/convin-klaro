@@ -1,47 +1,31 @@
 """
-Convin Klaro
-AI-powered knowledge & support intelligence platform
+Convin Support
+Chat & Voice Support Widget Platform
 """
 
 import streamlit as st
-import streamlit.components.v1 as _components
-import json, re, os, base64, zipfile, io, uuid, time, csv
-import psycopg2, psycopg2.extras
+import json
+import os
+import uuid
 from datetime import datetime
-from urllib.parse import urljoin, urlparse
+from typing import Optional
+import psycopg2
+import psycopg2.extras
 import anthropic
-
-def _b64_img(path):
-    """Return base64 data-URI for an image file, or '' if not found."""
-    try:
-        with open(path, "rb") as f:
-            ext = path.rsplit(".", 1)[-1].lower()
-            mime = {"png":"image/png","jpg":"image/jpeg","jpeg":"image/jpeg",
-                    "svg":"image/svg+xml","webp":"image/webp"}.get(ext,"image/png")
-            return f"data:{mime};base64,{base64.b64encode(f.read()).decode()}"
-    except Exception:
-        return ""
-
-_LOGO_URI = _b64_img(os.path.join(os.path.dirname(os.path.abspath(__file__)), "convin_logo.png"))
+import base64
 
 # ══════════════════════════════════════════════════════════════════
 #  CONFIG
 # ══════════════════════════════════════════════════════════════════
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
-KB_FILE = os.path.join(APP_DIR, "kb_store.json")
-KB_KEYS = ("kb_documents", "kb_links", "kb_whatsapp", "kb_crawled", "kb_faqs",
-           "kb_client_chats", "kb_rlqa_files", "kb_rlqa_qas", "kb_support_qas")
-MAX_CTX  = 580_000   # chars — safely under Claude's 200k-token window
-
 st.set_page_config(
-    page_title="Convin Klaro",
-    page_icon="✦",
+    page_title="Convin Support",
+    page_icon="💬",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # ══════════════════════════════════════════════════════════════════
-#  GLOBAL STYLES
+#  STYLES
 # ══════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
@@ -56,5593 +40,636 @@ st.markdown("""
 
 /*
  * ═══════════════════════════════════════════════════════════
- *  CONVIN KLARO — Premium Calm Design System
+ *  CONVIN SUPPORT — Premium Calm Design System
  * ───────────────────────────────────────────────────────────
  *  BG:         #0B0F1A   deep navy base
  *  Surface-1:  #111827   glass cards
  *  Surface-2:  #1A2035   elevated panels
- *  Surface-3:  #0D1117   deep answer blocks
  *  Accent:     #6366F1   indigo (calm, trustworthy)
  *  Accent-lt:  #818CF8   light indigo
  *  Cyan:       #22D3EE   subtle highlight
  *  Text-1:     #E5E7EB   soft white
  *  Text-2:     #94A3B8   muted steel blue
- *  Text-3:     #475569   very muted
- *  Border:     rgba(255,255,255,0.06)
- *  Border-acc: rgba(99,102,241,0.22)
- *  Green:      #10B981   WhatsApp / live
+ *  Green:      #10B981   live/active
  * ═══════════════════════════════════════════════════════════
  */
 
-/* ── Base ── */
 html, body, [class*="css"] {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
+
 .main {
     background: #060914;
     background-image:
         radial-gradient(ellipse 110% 55% at 50% -10%, rgba(139,92,246,0.18) 0%, transparent 55%),
         radial-gradient(ellipse 70%  45% at 95%  90%, rgba(236,72,153,0.12) 0%, transparent 50%),
-        radial-gradient(ellipse 60%  40% at 5%   75%, rgba(34,211,238,0.09) 0%, transparent 50%),
-        radial-gradient(ellipse 55%  35% at 75%  20%, rgba(99,102,241,0.10) 0%, transparent 52%);
-}
-.main .block-container { padding: 0 !important; max-width: 100% !important; }
-
-/* Aurora mesh grid */
-[data-testid="stAppViewContainer"]::before {
-    content: '';
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background-image:
-        radial-gradient(rgba(139,92,246,0.055) 1px, transparent 1px),
-        radial-gradient(rgba(34,211,238,0.025) 1px, transparent 1px);
-    background-size: 38px 38px, 72px 72px;
-    background-position: 0 0, 19px 19px;
-    pointer-events: none; z-index: 0;
-    animation: gridshift 50s linear infinite;
-}
-@keyframes gridshift {
-    0%   { background-position: 0 0, 19px 19px; }
-    100% { background-position: 38px 38px, 57px 57px; }
+        radial-gradient(ellipse 60%  40% at 5%   75%, rgba(34,211,238,0.09) 0%, transparent 50%);
 }
 
-/* Multi-colour aurora orbs */
-[data-testid="stAppViewContainer"]::after {
-    content: '';
-    position: fixed; top: -30%; left: -20%;
-    width: 80%; height: 80%;
-    background:
-        radial-gradient(ellipse at 30% 30%, rgba(139,92,246,0.12) 0%, transparent 55%),
-        radial-gradient(ellipse at 70% 70%, rgba(236,72,153,0.08) 0%, transparent 55%),
-        radial-gradient(ellipse at 80% 10%, rgba(34,211,238,0.07) 0%, transparent 50%);
-    border-radius: 50%;
-    pointer-events: none; z-index: 0;
-    animation: aurora 28s ease-in-out infinite alternate;
-}
-@keyframes aurora {
-    0%   { transform: translate(0%,   0%)   scale(1)    rotate(0deg);   }
-    33%  { transform: translate(22%,  16%)  scale(1.10) rotate(4deg);   }
-    66%  { transform: translate(8%,   32%)  scale(0.94) rotate(-3deg);  }
-    100% { transform: translate(28%,  10%)  scale(1.06) rotate(2deg);   }
+.main .block-container {
+    padding: 0 !important;
+    max-width: 100% !important;
 }
 
-/* ══ TOP NAV ══════════════════════════════════════════════ */
+/* Top Nav */
 .topnav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 999;
     height: 62px;
     background: rgba(6,9,20,0.88);
     backdrop-filter: blur(32px) saturate(220%);
-    -webkit-backdrop-filter: blur(32px) saturate(220%);
     border-bottom: 1px solid rgba(139,92,246,0.18);
     display: flex; align-items: center;
     padding: 0 40px;
     justify-content: space-between;
     box-shadow: 0 1px 0 rgba(139,92,246,0.12), 0 4px 32px rgba(0,0,0,0.30);
 }
-.topnav-brand { display: flex; align-items: center; gap: 12px; }
-.topnav-logo  { height: 28px; width: auto; object-fit: contain; opacity: 0.92; }
+
+.topnav-brand {
+    display: flex; align-items: center; gap: 12px;
+}
+
 .topnav-brand .dot {
     width: 34px; height: 34px; border-radius: 10px;
-    background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #EC4899 100%);
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
     display: flex; align-items: center; justify-content: center;
     font-size: 0.88rem; color: #fff; font-weight: 700;
-    box-shadow: 0 0 22px rgba(139,92,246,0.45), 0 4px 12px rgba(0,0,0,0.3);
+    box-shadow: 0 0 22px rgba(99,102,241,0.45);
 }
+
 .topnav-brand .name {
     font-size: 0.95rem; font-weight: 700; color: #E5E7EB;
     letter-spacing: -0.025em;
 }
-.topnav-brand .badge {
-    font-size: 0.57rem; font-weight: 700; letter-spacing: 0.11em;
-    background: linear-gradient(135deg, rgba(139,92,246,0.15), rgba(236,72,153,0.10));
-    color: #C4B5FD;
-    border: 1px solid rgba(139,92,246,0.32);
-    padding: 3px 12px; border-radius: 20px;
-    text-transform: uppercase;
-    box-shadow: 0 0 12px rgba(139,92,246,0.12);
-}
-.topnav-right { display: flex; align-items: center; gap: 10px; }
+
 .topnav-status {
     display: flex; align-items: center; gap: 6px;
-    font-size: 0.71rem; color: #9CA3AF; font-weight: 500;
+    font-size: 0.71rem; color: #10B981; font-weight: 600;
 }
+
 .live-dot {
     width: 7px; height: 7px; border-radius: 50%;
     background: #10B981;
     box-shadow: 0 0 8px rgba(16,185,129,0.60);
     animation: livepulse 3s ease-in-out infinite;
 }
+
 @keyframes livepulse {
     0%,100% { opacity:1; transform:scale(1); }
     50%      { opacity:0.55; transform:scale(0.78); }
 }
 
-/* ══ CHAT PAGE ════════════════════════════════════════════ */
-.chat-page { min-height:100vh; padding-top:62px; }
-.chat-feed  { max-width:740px; width:100%; margin:0 auto; padding:48px 24px 180px; }
-
-/* Welcome card */
-.welcome-card { text-align:center; padding:82px 24px 54px; }
-.welcome-icon {
-    width: 72px; height: 72px; border-radius: 24px;
-    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
-    margin: 0 auto 26px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 2rem;
-    box-shadow:
-        0 0 52px rgba(99,102,241,0.28),
-        0 14px 36px rgba(0,0,0,0.42),
-        inset 0 1px 0 rgba(255,255,255,0.14);
-    animation: float 5.5s ease-in-out infinite;
-}
-@keyframes float {
-    0%,100% { transform: translateY(0) rotate(0deg);  }
-    50%      { transform: translateY(-9px) rotate(1deg); }
-}
-.welcome-eyebrow {
-    display: inline-block;
-    font-size: 0.64rem; font-weight: 600; letter-spacing: 0.14em;
-    text-transform: uppercase; color: #818CF8;
-    background: rgba(99,102,241,0.10);
-    border: 1px solid rgba(99,102,241,0.22);
-    padding: 4px 14px; border-radius: 20px;
-    margin-bottom: 18px;
-}
-.welcome-title {
-    font-size: 1.78rem; font-weight: 800;
-    color: #E5E7EB; letter-spacing: -0.03em;
-    line-height: 1.18; margin-bottom: 13px;
-}
-.welcome-title span {
-    background: linear-gradient(90deg, #818CF8 0%, #22D3EE 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
-.welcome-sub {
-    font-size: 0.88rem; color: #94A3B8; line-height: 1.72;
-    max-width: 420px; margin: 0 auto;
+/* Main Container */
+.support-container {
+    padding-top: 80px;
+    padding-bottom: 60px;
+    min-height: 100vh;
 }
 
-/* KB stat chips */
-.kb-stats-row { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:28px; }
-.kb-stat-chip {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(17,24,39,0.65);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 30px; padding: 8px 18px;
-    font-size: 0.78rem; color: #9CA3AF;
-    animation: popIn 0.42s ease forwards; opacity: 0;
-    transition: border-color 0.2s, background 0.2s;
+.support-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 24px;
 }
-.kb-stat-chip:nth-child(1) { animation-delay: 0.10s; }
-.kb-stat-chip:nth-child(2) { animation-delay: 0.22s; }
-.kb-stat-chip:nth-child(3) { animation-delay: 0.34s; }
-@keyframes popIn {
-    from { opacity:0; transform:translateY(8px) scale(0.95); }
-    to   { opacity:1; transform:translateY(0)    scale(1);    }
+
+.widgets-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-top: 40px;
 }
-.kb-stat-chip.active {
-    border-color: rgba(99,102,241,0.26);
-    background: rgba(99,102,241,0.08);
+
+@media (max-width: 900px) {
+    .widgets-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Widget Container */
+.widget-container {
+    background: rgba(17, 24, 39, 0.55);
+    border: 1px solid rgba(99, 102, 241, 0.22);
+    border-radius: 16px;
+    padding: 28px;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 4px 32px rgba(0, 0, 0, 0.25);
+}
+
+.widget-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.widget-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.3);
+}
+
+.widget-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #E5E7EB;
+}
+
+/* Chat Widget */
+.chat-messages {
+    background: rgba(13, 17, 23, 0.6);
+    border-radius: 12px;
+    padding: 16px;
+    height: 400px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    border: 1px solid rgba(99, 102, 241, 0.12);
+}
+
+.message {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.message.user {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.15) 100%);
+    color: #C4B5FD;
+    margin-left: 24px;
+    border-left: 2px solid #6366F1;
+}
+
+.message.assistant {
+    background: rgba(99, 102, 241, 0.12);
+    color: #E5E7EB;
+    margin-right: 24px;
+    border-left: 2px solid #22D3EE;
+}
+
+.chat-input-container {
+    display: flex;
+    gap: 8px;
+}
+
+.chat-input-container input {
+    flex: 1;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(99, 102, 241, 0.22);
+    background: rgba(17, 24, 39, 0.8);
+    color: #E5E7EB;
+    font-size: 0.9rem;
+}
+
+.chat-input-container input::placeholder {
     color: #6B7280;
 }
-.kb-stat-chip.wa.active {
-    border-color: rgba(16,185,129,0.26);
-    background: rgba(16,185,129,0.07);
-}
-.kb-stat-chip .num {
-    font-weight: 800; font-size: 0.9rem;
-    background: linear-gradient(135deg, #818CF8, #6366F1);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
-.kb-stat-chip.wa .num {
-    background: linear-gradient(135deg, #34D399, #10B981);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-}
-.no-kb-hint {
-    margin-top: 22px; font-size: 0.76rem; color: #6B7280;
-    background: rgba(255,255,255,0.02);
-    border: 1px dashed rgba(255,255,255,0.07);
-    border-radius: 20px; padding: 8px 22px; display: inline-block;
-}
-.ready-badge {
-    display: inline-flex; align-items: center; gap: 7px;
-    margin-top: 18px;
-    font-size: 0.63rem; font-weight: 700; letter-spacing: 0.13em;
-    text-transform: uppercase; color: #10B981;
-    background: rgba(16,185,129,0.08);
-    border: 1px solid rgba(16,185,129,0.22);
-    padding: 4px 16px; border-radius: 20px;
-    animation: readypop 0.6s 0.5s ease forwards; opacity: 0;
-}
-@keyframes readypop {
-    from { opacity:0; transform:scale(0.92); }
-    to   { opacity:1; transform:scale(1);    }
+
+.chat-input-container button {
+    padding: 10px 18px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
 }
 
-/* Suggestion chips */
-[data-testid="stHorizontalBlock"] .stButton > button[kind="secondary"] {
-    border-radius: 24px !important;
-    padding: 9px 16px !important;
-    font-size: 0.79rem !important;
-    background: rgba(17,24,39,0.65) !important;
-    backdrop-filter: blur(14px) !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
-    color: #9CA3AF !important;
-    white-space: nowrap !important;
-    transition: all 0.25s cubic-bezier(0.4,0,0.2,1) !important;
-}
-[data-testid="stHorizontalBlock"] .stButton > button[kind="secondary"]:hover {
-    border-color: rgba(99,102,241,0.38) !important;
-    color: #818CF8 !important;
-    background: rgba(99,102,241,0.08) !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 26px rgba(99,102,241,0.14) !important;
+.chat-input-container button:hover {
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.4);
 }
 
-/* Messages */
-.msg-group { margin-bottom: 28px; animation: fadeUp 0.26s cubic-bezier(0.4,0,0.2,1); }
-@keyframes fadeUp {
-    from { opacity:0; transform:translateY(12px); }
-    to   { opacity:1; transform:translateY(0);    }
-}
-.msg-user-row { display:flex; justify-content:flex-end; margin-bottom:5px; }
-.msg-user-bubble {
-    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
-    color: #EEF2FF;
-    padding: 13px 20px;
-    border-radius: 20px 20px 5px 20px;
-    max-width: 65%;
-    font-size: 0.88rem; line-height: 1.65;
-    box-shadow: 0 4px 26px rgba(99,102,241,0.28), 0 2px 8px rgba(0,0,0,0.22);
-}
-.msg-ai-row { display:flex; align-items:flex-start; gap:12px; }
-.msg-ai-avatar {
-    position: relative;
-    width: 34px; height: 34px; border-radius: 11px;
-    background: linear-gradient(135deg, #6366F1 0%, #4338CA 100%);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.72rem; color: #EEF2FF; font-weight: 700;
-    flex-shrink: 0; margin-top: 2px;
-    box-shadow: 0 0 18px rgba(99,102,241,0.28), 0 4px 10px rgba(0,0,0,0.25);
-}
-.msg-ai-avatar::before {
-    content: '';
-    position: absolute; top: -2px; left: -2px;
-    width: 38px; height: 38px; border-radius: 13px;
-    border: 1.5px solid rgba(99,102,241,0.25);
-    animation: avatarring 4s ease-out infinite;
-}
-@keyframes avatarring {
-    0%   { opacity:0.8; transform:scale(1);    }
-    100% { opacity:0;   transform:scale(1.55); }
-}
-.msg-ai-bubble {
-    background: rgba(17,24,39,0.72);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
-    color: #94A3B8;
-    padding: 14px 20px;
-    border-radius: 5px 20px 20px 20px;
-    max-width: 72%;
-    font-size: 0.88rem; line-height: 1.80;
-    border: 1px solid rgba(255,255,255,0.06);
-    box-shadow: 0 4px 22px rgba(0,0,0,0.20);
-}
-.msg-ai-bubble b, .msg-ai-bubble strong { color: #818CF8; font-weight: 600; }
-.msg-ai-bubble ol, .msg-ai-bubble ul    { padding-left: 18px; margin: 8px 0; }
-.msg-ai-bubble li { margin-bottom: 5px; color: #94A3B8; }
-.msg-ai-bubble blockquote {
-    border-left: 3px solid #10B981;
-    background: rgba(16,185,129,0.07);
-    border-radius: 0 9px 9px 0;
-    padding: 7px 14px; margin: 10px 0 4px;
-    font-size: 0.82rem; color: #34D399;
-}
-.msg-ts       { font-size:0.6rem; color:#6B7280; margin-top:5px; text-align:right; }
-.msg-ts-left  { text-align:left; margin-left:46px; }
-.sources-bar  { display:flex; align-items:center; gap:5px; margin-top:8px; margin-left:46px; flex-wrap:wrap; }
-.source-tag {
-    font-size: 0.62rem; font-weight: 500; color: #6B7280;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    padding: 2px 9px; border-radius: 10px;
-}
-
-/* Input bar */
-.input-bar-wrap {
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 998;
-    background: rgba(11,15,26,0.88);
-    backdrop-filter: blur(28px) saturate(180%);
-    -webkit-backdrop-filter: blur(28px) saturate(180%);
-    border-top: 1px solid rgba(255,255,255,0.05);
-    padding: 14px 0 22px;
-    box-shadow: 0 -1px 30px rgba(0,0,0,0.28);
-}
-.input-bar-inner { max-width:740px; margin:0 auto; padding:0 24px; display:flex; align-items:center; gap:10px; }
-.input-bar-inner .stTextInput > div > div {
-    background: rgba(17,24,39,0.78) !important;
-    backdrop-filter: blur(16px) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 16px !important;
-    font-size: 0.9rem !important; color: #E5E7EB !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.16) !important;
-}
-.input-bar-inner .stTextInput > div > div:focus-within {
-    border-color: rgba(99,102,241,0.52) !important;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.09), 0 2px 12px rgba(0,0,0,0.16) !important;
-}
-.input-bar-inner .stTextInput input { font-size:0.9rem !important; color:#E5E7EB !important; background:transparent !important; }
-.input-bar-inner .stTextInput input::placeholder { color:#4B5563 !important; }
-
-/* ══ BUTTONS ════════════════════════════════════════════ */
-.stButton > button {
-    border-radius: 11px !important; font-weight: 600 !important;
-    font-size: 0.83rem !important;
-    transition: all 0.22s cubic-bezier(0.4,0,0.2,1) !important;
-    letter-spacing: -0.01em !important;
-}
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #8B5CF6 0%, #6366F1 50%, #4F46E5 100%) !important;
-    color: #EEF2FF !important; border: none !important;
-    box-shadow: 0 4px 24px rgba(139,92,246,0.42), 0 2px 8px rgba(0,0,0,0.25) !important;
-}
-.stButton > button[kind="primary"]:hover {
-    background: linear-gradient(135deg, #A78BFA 0%, #818CF8 50%, #6366F1 100%) !important;
-    box-shadow: 0 8px 36px rgba(139,92,246,0.55), 0 2px 10px rgba(0,0,0,0.25) !important;
-    transform: translateY(-2px) !important;
-}
-.stButton > button[kind="secondary"] {
-    background: rgba(17,24,39,0.65) !important;
-    color: #9CA3AF !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
-    backdrop-filter: blur(10px) !important;
-}
-.stButton > button[kind="secondary"]:hover {
-    border-color: rgba(99,102,241,0.38) !important;
-    color: #C4C9D4 !important;
-    background: rgba(99,102,241,0.08) !important;
-    box-shadow: 0 4px 16px rgba(99,102,241,0.12) !important;
-}
-
-/* ══ TEXT INPUTS ════════════════════════════════════════ */
-.stTextInput > div > div {
-    background: rgba(17,24,39,0.68) !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-    border-radius: 12px !important; color: #E5E7EB !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
-    backdrop-filter: blur(12px) !important;
-}
-.stTextInput > div > div:focus-within {
-    border-color: rgba(99,102,241,0.48) !important;
-    box-shadow: 0 0 0 3px rgba(99,102,241,0.09) !important;
-}
-.stTextInput input { color: #E5E7EB !important; background: transparent !important; }
-.stTextInput input::placeholder { color: #4B5563 !important; }
-.stTextInput label { color: #94A3B8 !important; font-size: 0.82rem !important; font-weight: 500 !important; }
-
-/* ══ SETTINGS PAGE ═══════════════════════════════════════ */
-.settings-page { padding-top: 62px; min-height: 100vh; }
-.settings-inner { max-width: 900px; margin: 0 auto; padding: 44px 32px; }
-.settings-title { font-size:1.3rem; font-weight:800; color:#E5E7EB; letter-spacing:-0.025em; margin-bottom:4px; }
-.settings-sub   { font-size:0.82rem; color:#9CA3AF; margin-bottom:30px; }
-
-/* File rows */
-.file-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 11px 16px; border-radius: 12px;
-    background: rgba(17,24,39,0.60);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.06);
-    margin-bottom: 7px;
-    transition: border-color 0.2s, background 0.2s;
-}
-.file-row:hover {
-    border-color: rgba(99,102,241,0.24);
-    background: rgba(17,24,39,0.80);
-}
-.file-row-icon { font-size:1.05rem; flex-shrink:0; }
-.file-row-name { font-size:0.82rem; font-weight:500; color:#9CA3AF; flex:1; }
-.file-row-meta { font-size:0.69rem; color:#6B7280; }
-
-/* Upload zone */
-div[data-testid="stFileUploader"] {
-    background: rgba(99,102,241,0.04) !important;
-    border: 1.5px dashed rgba(99,102,241,0.25) !important;
-    border-radius: 14px !important;
-    transition: border-color 0.2s, background 0.2s !important;
-}
-div[data-testid="stFileUploader"]:hover {
-    background: rgba(99,102,241,0.07) !important;
-    border-color: rgba(99,102,241,0.42) !important;
-}
-
-/* ══ TABS ════════════════════════════════════════════════ */
-.stTabs [data-baseweb="tab-list"] {
-    background: rgba(10,8,25,0.70);
-    backdrop-filter: blur(18px);
-    border-radius: 14px; padding: 5px; gap: 3px;
-    border: 1px solid rgba(29,78,216,0.35);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04);
-}
-.stTabs [data-baseweb="tab"] {
-    border-radius: 10px !important; font-size: 0.85rem !important;
-    font-weight: 700 !important; padding: 9px 20px !important;
-    color: #93C5FD !important;
-    transition: color 0.2s, background 0.2s !important;
-}
-.stTabs [data-baseweb="tab"]:hover { color: #fff !important; background: rgba(29,78,216,0.18) !important; }
-.stTabs [aria-selected="true"] {
-    background: linear-gradient(135deg, rgba(29,78,216,0.45), rgba(37,99,235,0.35)) !important;
-    color: #fff !important;
-    box-shadow: 0 0 0 1px rgba(59,130,246,0.6), 0 4px 14px rgba(29,78,216,0.35) !important;
-}
-
-/* Toggle */
-.stCheckbox label { font-size:0.85rem !important; color:#94A3B8 !important; font-weight:500 !important; }
-
-/* Slider */
-.stSlider [data-baseweb="slider"] div[role="slider"] {
-    background: #6366F1 !important;
-    box-shadow: 0 0 10px rgba(99,102,241,0.50) !important;
-}
-
-/* Divider */
-hr { border: none; border-top: 1px solid rgba(255,255,255,0.05) !important; margin: 22px 0 !important; }
-
-/* ══ EXPANDERS ═══════════════════════════════════════════ */
-.streamlit-expanderHeader {
-    background: rgba(17,24,39,0.68) !important;
-    backdrop-filter: blur(14px) !important;
-    border: 1px solid rgba(255,255,255,0.07) !important;
-    border-radius: 12px !important;
-    color: #6B7280 !important;
-    font-size: 0.88rem !important; font-weight: 600 !important;
-    padding: 12px 16px !important;
-    transition: border-color 0.2s, color 0.2s !important;
-}
-.streamlit-expanderHeader:hover {
-    border-color: rgba(99,102,241,0.28) !important;
-    color: #94A3B8 !important;
-}
-.streamlit-expanderContent {
-    background: rgba(11,15,26,0.80) !important;
-    border: 1px solid rgba(255,255,255,0.05) !important;
-    border-top: none !important;
-    border-radius: 0 0 12px 12px !important;
-}
-[data-testid="stExpander"] {
-    border: 1px solid rgba(255,255,255,0.07) !important;
-    border-radius: 12px !important;
-    background: rgba(17,24,39,0.62) !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
-    margin-bottom: 9px !important;
-    overflow: hidden !important;
-    transition: border-color 0.22s, box-shadow 0.22s !important;
-}
-[data-testid="stExpander"]:hover {
-    border-color: rgba(99,102,241,0.26) !important;
-    box-shadow: 0 4px 28px rgba(0,0,0,0.16) !important;
-}
-[data-testid="stExpander"] summary {
-    background: transparent !important;
-    color: #9CA3AF !important;
-    font-size: 0.88rem !important; font-weight: 600 !important;
-    border-radius: 12px !important;
-    padding: 13px 18px !important;
-    transition: color 0.2s !important;
-}
-[data-testid="stExpander"] summary:hover { color: #E5E7EB !important; }
-[data-testid="stExpander"] summary span,
-[data-testid="stExpander"] summary p { color: inherit !important; font-weight: 600 !important; }
-[data-testid="stExpander"] > div:last-child {
-    background: rgba(11,15,26,0.75) !important;
-    border-top: 1px solid rgba(255,255,255,0.05) !important;
-    padding: 0 !important;
-}
-[data-testid="stExpander"] > div:last-child *,
-[data-testid="stExpander"] > div:last-child p,
-[data-testid="stExpander"] > div:last-child span,
-[data-testid="stExpander"] > div:last-child li,
-[data-testid="stExpander"] > div:last-child div { color: #94A3B8 !important; }
-[data-testid="stExpander"] > div:last-child strong,
-[data-testid="stExpander"] > div:last-child b    { color: #818CF8 !important; }
-
-/* Progress */
-.stProgress > div > div {
-    background: linear-gradient(90deg, #6366F1, #22D3EE) !important;
-    border-radius: 4px !important;
-}
-
-/* Metrics */
-[data-testid="metric-container"] {
-    background: rgba(17,24,39,0.62);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 14px; padding: 16px 20px;
-    box-shadow: 0 2px 14px rgba(0,0,0,0.15);
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-[data-testid="metric-container"]:hover {
-    border-color: rgba(99,102,241,0.20);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.20);
-}
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: #E5E7EB !important; font-weight: 800 !important; font-size: 1.6rem !important;
-}
-[data-testid="metric-container"] [data-testid="stMetricLabel"] {
-    color: #9CA3AF !important; font-size: 0.75rem !important; font-weight: 500 !important;
-}
-
-/* Alerts */
-.stAlert { border-radius: 12px !important; border: none !important; }
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.16); border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.32); }
-
-/* ══ LANDING PAGE HERO ════════════════════════════════════ */
-.lp-hero {
-    position: relative; overflow: hidden;
-    padding: 52px 44px 44px;
-    margin-bottom: 32px;
-    border-radius: 28px;
-    background:
-        linear-gradient(135deg,
-            rgba(17,7,40,0.95)  0%,
-            rgba(26,14,58,0.95) 35%,
-            rgba(14,22,50,0.95) 65%,
-            rgba(6,12,30,0.95)  100%);
-    border: 1px solid rgba(139,92,246,0.30);
-    box-shadow:
-        0 0  0  1px rgba(236,72,153,0.08),
-        0 24px 80px rgba(0,0,0,0.55),
-        inset 0 1px 0  rgba(255,255,255,0.07);
-}
-
-/* Animated gradient border shimmer */
-.lp-hero::before {
-    content: '';
-    position: absolute; inset: -2px;
-    border-radius: 30px;
-    background: linear-gradient(130deg,
-        rgba(139,92,246,0.55) 0%,
-        rgba(236,72,153,0.40) 30%,
-        rgba(34,211,238,0.35) 55%,
-        rgba(245,158,11,0.30) 75%,
-        rgba(139,92,246,0.55) 100%);
-    background-size: 300% 300%;
-    animation: bordershine 6s ease infinite;
-    z-index: -1;
-}
-@keyframes bordershine {
-    0%   { background-position: 0%   50%; }
-    50%  { background-position: 100% 50%; }
-    100% { background-position: 0%   50%; }
-}
-
-/* Floating glow orbs inside hero */
-.lp-hero::after {
-    content: '';
-    position: absolute; top: -60px; right: -40px;
-    width: 320px; height: 320px; border-radius: 50%;
-    background: radial-gradient(circle,
-        rgba(139,92,246,0.22) 0%,
-        rgba(236,72,153,0.10) 45%,
-        transparent 70%);
-    pointer-events: none;
-    animation: heroorb 8s ease-in-out infinite alternate;
-}
-@keyframes heroorb {
-    0%   { transform: translate(0, 0)    scale(1);    }
-    100% { transform: translate(-30px, 30px) scale(1.15); }
-}
-
-.lp-hero-inner { position: relative; z-index: 1; }
-
-/* Eyebrow pill */
-.lp-eyebrow {
-    display: inline-flex; align-items: center; gap: 8px;
-    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.14em;
-    text-transform: uppercase;
-    background: linear-gradient(135deg, rgba(139,92,246,0.18), rgba(236,72,153,0.12));
-    border: 1px solid rgba(139,92,246,0.40);
-    color: #C4B5FD;
-    padding: 5px 16px; border-radius: 30px;
-    margin-bottom: 20px;
-    box-shadow: 0 0 20px rgba(139,92,246,0.15);
-}
-.lp-eyebrow .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: linear-gradient(135deg, #A78BFA, #EC4899);
-    box-shadow: 0 0 8px rgba(167,139,250,0.8);
-    animation: livepulse 2.5s ease-in-out infinite;
-}
-
-/* Main title */
-.lp-title {
-    font-size: clamp(1.8rem, 3.5vw, 2.6rem) !important;
-    font-weight: 900 !important;
-    line-height: 1.12 !important;
-    letter-spacing: -0.04em !important;
-    color: #F1F5F9 !important;
-    margin: 0 0 14px !important;
-}
-.lp-title .grad {
-    background: linear-gradient(95deg,
-        #A78BFA 0%,
-        #EC4899 35%,
-        #22D3EE 65%,
-        #A78BFA 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: textshine 4s linear infinite;
-}
-@keyframes textshine {
-    0%   { background-position: 0%   center; }
-    100% { background-position: 200% center; }
-}
-
-/* Subtitle */
-.lp-sub {
-    font-size: 0.92rem !important;
-    color: #94A3B8 !important;
-    line-height: 1.7 !important;
-    max-width: 540px;
-    margin-bottom: 28px !important;
-}
-
-/* Feature pills row */
-.lp-pills {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    margin-bottom: 32px;
-}
-.lp-pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 0.72rem; font-weight: 600;
-    padding: 6px 16px; border-radius: 30px;
-    letter-spacing: 0.02em;
-    transition: transform 0.2s, box-shadow 0.2s;
-    cursor: default;
-}
-.lp-pill:hover { transform: translateY(-2px); }
-.lp-pill-violet {
-    background: rgba(139,92,246,0.14);
-    border: 1px solid rgba(139,92,246,0.40);
-    color: #C4B5FD;
-    box-shadow: 0 2px 12px rgba(139,92,246,0.15);
-}
-.lp-pill-pink {
-    background: rgba(236,72,153,0.12);
-    border: 1px solid rgba(236,72,153,0.38);
-    color: #F9A8D4;
-    box-shadow: 0 2px 12px rgba(236,72,153,0.13);
-}
-.lp-pill-cyan {
-    background: rgba(34,211,238,0.10);
-    border: 1px solid rgba(34,211,238,0.35);
-    color: #67E8F9;
-    box-shadow: 0 2px 12px rgba(34,211,238,0.12);
-}
-.lp-pill-green {
-    background: rgba(16,185,129,0.10);
-    border: 1px solid rgba(16,185,129,0.35);
-    color: #6EE7B7;
-    box-shadow: 0 2px 12px rgba(16,185,129,0.12);
-}
-.lp-pill-amber {
-    background: rgba(245,158,11,0.10);
-    border: 1px solid rgba(245,158,11,0.35);
-    color: #FCD34D;
-    box-shadow: 0 2px 12px rgba(245,158,11,0.12);
-}
-
-/* Stat cards row */
-.lp-stats {
-    display: flex; gap: 14px; flex-wrap: wrap;
-}
-.lp-stat {
-    flex: 1; min-width: 100px;
-    background: rgba(255,255,255,0.04);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px;
-    padding: 16px 20px;
+/* Voice Widget */
+.voice-display {
+    background: rgba(13, 17, 23, 0.6);
+    border-radius: 12px;
+    padding: 24px;
     text-align: center;
-    transition: border-color 0.25s, transform 0.25s, box-shadow 0.25s;
-    position: relative; overflow: hidden;
+    border: 1px solid rgba(99, 102, 241, 0.12);
+    margin-bottom: 20px;
 }
-.lp-stat::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    border-radius: 16px 16px 0 0;
-    opacity: 0.8;
+
+.voice-icon-large {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    margin: 0 auto 16px;
+    box-shadow: 0 0 32px rgba(16, 185, 129, 0.3);
 }
-.lp-stat-v .n  { color: #C4B5FD !important; }
-.lp-stat-v::before { background: linear-gradient(90deg, #8B5CF6, #6366F1); }
-.lp-stat-p .n  { color: #F9A8D4 !important; }
-.lp-stat-p::before { background: linear-gradient(90deg, #EC4899, #DB2777); }
-.lp-stat-c .n  { color: #67E8F9 !important; }
-.lp-stat-c::before { background: linear-gradient(90deg, #22D3EE, #0EA5E9); }
-.lp-stat-g .n  { color: #6EE7B7 !important; }
-.lp-stat-g::before { background: linear-gradient(90deg, #10B981, #059669); }
-.lp-stat:hover {
-    border-color: rgba(139,92,246,0.28);
-    transform: translateY(-3px);
-    box-shadow: 0 12px 36px rgba(0,0,0,0.30);
+
+.voice-status {
+    font-size: 0.9rem;
+    color: #94A3B8;
+    margin-bottom: 16px;
 }
-.lp-stat .n {
-    font-size: 2rem; font-weight: 900;
-    letter-spacing: -0.04em; line-height: 1;
-    margin-bottom: 5px;
+
+.voice-controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.voice-btn {
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.voice-btn.primary {
+    background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+    color: #fff;
+}
+
+.voice-btn.primary:hover {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.voice-btn.secondary {
+    background: rgba(99, 102, 241, 0.12);
+    color: #E5E7EB;
+    border: 1px solid rgba(99, 102, 241, 0.22);
+}
+
+.voice-btn.secondary:hover {
+    background: rgba(99, 102, 241, 0.22);
+}
+
+/* Settings Panel */
+.settings-panel {
+    background: rgba(17, 24, 39, 0.55);
+    border: 1px solid rgba(99, 102, 241, 0.22);
+    border-radius: 16px;
+    padding: 20px;
+    margin-top: 32px;
+}
+
+.settings-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #C4B5FD;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+}
+
+.setting-item {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(99, 102, 241, 0.12);
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-label {
+    font-size: 0.85rem;
+    color: #E5E7EB;
+    margin-bottom: 6px;
     display: block;
 }
-.lp-stat .l {
-    font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em;
-    text-transform: uppercase; color: #6B7280;
-}
 
-/* ══ FAQ / ANSWER STUDIO (below hero) ════════════════════ */
-.cat-label {
-    display: inline-flex; align-items: center; gap: 7px;
-    background: #DBEAFE;
-    border: 1px solid #93C5FD;
-    color: #1D4ED8 !important; padding: 6px 18px; border-radius: 20px;
-    font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em;
-    margin: 26px 0 14px;
-}
-
-/* Answer blocks — blue text on very light blue */
-.faq-answer-wrap {
-    padding: 16px 18px 20px;
-    background: #EFF6FF;
-    border-radius: 0 0 12px 12px;
-}
-.faq-answer-label {
-    font-size: 0.67rem; font-weight: 700; letter-spacing: 0.14em;
-    text-transform: uppercase; color: #1D4ED8; margin-bottom: 10px;
-}
-.faq-answer-body {
-    font-size: 0.91rem; color: #1E3A8A;
-    line-height: 1.86;
-    padding: 14px 18px;
-    background: #DBEAFE;
-    border-left: 3px solid #3B82F6;
-    border-radius: 0 12px 12px 0;
-}
-.faq-answer-body strong, .faq-answer-body b { color: #1D4ED8; font-weight: 600; }
-.faq-answer-body em { color: #2563EB; font-style: italic; }
-.faq-answer-body a { color: #2563EB !important; }
-
-/* ── Expanders — blue on light blue ── */
-[data-testid="stExpander"] {
-    background: #EFF6FF !important;
-    border: 1px solid #BFDBFE !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
-}
-[data-testid="stExpander"] > details > summary {
-    background: #EFF6FF !important;
-    color: #1E3A8A !important;
-    font-size: 0.9rem !important;
-    font-weight: 600 !important;
-    padding: 13px 18px !important;
-}
-[data-testid="stExpander"] > details > summary:hover {
-    background: #DBEAFE !important;
-    color: #1D4ED8 !important;
-}
-[data-testid="stExpander"] > details > summary p,
-[data-testid="stExpander"] > details > summary span {
-    color: #1E3A8A !important;
-}
-[data-testid="stExpander"] details[open] > summary {
-    border-bottom: 1px solid #BFDBFE !important;
-}
-[data-testid="stExpander"] .streamlit-expanderContent {
-    background: #EFF6FF !important;
-    color: #1E3A8A !important;
-}
-[data-testid="stExpander"] .streamlit-expanderContent p,
-[data-testid="stExpander"] .streamlit-expanderContent li,
-[data-testid="stExpander"] .streamlit-expanderContent span {
-    color: #1E3A8A !important;
-}
-
-/* General descriptive / body text in main content */
-[data-testid="stVerticalBlock"] .stMarkdown p {
-    color: #1E3A8A !important;
-}
-[data-testid="stVerticalBlock"] .stMarkdown li {
-    color: #1E3A8A !important;
-}
-/* Tab labels stay light */
-[data-testid="stTabs"] [data-testid="stMarkdownContainer"] p { color: inherit !important; }
-
-/* Source badges */
-.faq-wa-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(16,185,129,0.08);
-    border: 1px solid rgba(16,185,129,0.18);
-    border-radius: 10px; padding: 2px 10px;
-    font-size: 0.65rem; font-weight: 600; color: #34D399;
-}
-.faq-doc-badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    background: rgba(99,102,241,0.08);
-    border: 1px solid rgba(99,102,241,0.18);
-    border-radius: 10px; padding: 2px 10px;
-    font-size: 0.65rem; font-weight: 600; color: #818CF8;
-}
-
-/* WA citation */
-.wa-cite {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: rgba(16,185,129,0.07);
-    border: 1px solid rgba(16,185,129,0.16);
-    border-radius: 10px; padding: 5px 13px;
-    font-size: 0.72rem; font-weight: 600; color: #34D399;
-    margin-top: 12px;
-}
-
-/* No-FAQ empty state */
-.no-faq {
-    text-align: center; padding: 72px 24px;
-    background: rgba(17,24,39,0.48);
-    backdrop-filter: blur(14px);
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.05);
-    box-shadow: 0 4px 28px rgba(0,0,0,0.16);
-}
-.no-faq-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.7; }
-.no-faq h3 { font-size: 1rem; color: #94A3B8; font-weight: 600; margin-bottom: 8px; }
-.no-faq p  { font-size: 0.82rem; color: #6B7280; }
-
-/* WA panel */
-.wa-panel {
-    background: rgba(16,185,129,0.04);
-    backdrop-filter: blur(14px);
-    border: 1px solid rgba(16,185,129,0.13);
-    border-radius: 16px; padding: 18px 22px; margin-bottom: 20px;
-    box-shadow: 0 2px 18px rgba(0,0,0,0.10);
-}
-.wa-panel-title {
-    font-size: 0.75rem; font-weight: 700; color: #10B981;
-    letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 14px;
-}
-.wa-cards-row { display: flex; flex-wrap: wrap; gap: 12px; }
-.wa-chat-card {
-    background: rgba(17,24,39,0.62);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(16,185,129,0.13);
-    border-radius: 14px; padding: 14px 18px; min-width: 240px; flex: 1;
-    transition: border-color 0.2s, box-shadow 0.2s;
-}
-.wa-chat-card:hover {
-    border-color: rgba(16,185,129,0.28);
-    box-shadow: 0 4px 22px rgba(0,0,0,0.14);
-}
-.wa-chat-top  { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
-.wa-chat-icon { font-size: 1.05rem; }
-.wa-chat-name { font-size: 0.82rem; font-weight: 600; color: #9CA3AF; flex: 1; }
-.wa-chat-badge {
-    font-size: 0.65rem; font-weight: 600; color: #10B981;
-    background: rgba(16,185,129,0.08);
-    border: 1px solid rgba(16,185,129,0.18);
-    border-radius: 10px; padding: 2px 9px;
-}
-.wa-chat-meta { font-size: 0.72rem; color: #9CA3AF; margin-bottom: 4px; }
-.wa-chat-qa   { font-size: 0.7rem; color: #10B981; font-weight: 600; margin-top: 5px; }
-
-/* ── Floating chat widget ─────────────────────────────── */
-.cf-shell {
-    background: rgba(10,13,24,0.98);
-    border: 1px solid rgba(139,92,246,0.22);
-    border-radius: 20px;
-    box-shadow: 0 28px 70px rgba(0,0,0,0.7), 0 0 0 1px rgba(139,92,246,0.08);
-    overflow: hidden;
-    animation: cfIn 0.26s cubic-bezier(0.2,0.8,0.4,1) both;
-    width: 100%;
-}
-@keyframes cfIn {
-    from { opacity:0; transform:translateY(18px) scale(0.96); }
-    to   { opacity:1; transform:translateY(0)     scale(1);   }
-}
-.cf-header {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:13px 16px;
-    background:linear-gradient(135deg,rgba(17,24,39,1) 0%,rgba(22,30,50,1) 100%);
-    border-bottom:1px solid rgba(255,255,255,0.05);
-}
-.cf-title-row { display:flex; align-items:center; gap:8px; }
-.cf-live-dot { width:8px; height:8px; border-radius:50%; background:#10B981;
-    box-shadow:0 0 6px rgba(16,185,129,0.7); animation:livepulse 3s ease-in-out infinite; }
-.cf-title { font-size:0.87rem; font-weight:700; color:#E5E7EB; }
-.cf-sub   { font-size:0.68rem; color:#6B7280; margin-top:1px; }
-@keyframes cf-msg-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
-.cf-msgs {
-    height:calc(100dvh - 255px); min-height:120px;
-    padding:16px 14px 10px;
-    overflow-y:auto; display:flex; flex-direction:column; gap:10px;
-    scroll-behavior:smooth;
-}
-.cf-msgs::-webkit-scrollbar { width:4px; }
-.cf-msgs::-webkit-scrollbar-track { background:rgba(255,255,255,.03); border-radius:2px; }
-.cf-msgs::-webkit-scrollbar-thumb { background:rgba(99,102,241,.35); border-radius:2px; }
-.cf-msgs::-webkit-scrollbar-thumb:hover { background:rgba(99,102,241,.6); }
-/* scroll-to-bottom button */
-.cf-scroll-btn .stButton>button{
-    height:28px!important;font-size:.72rem!important;font-weight:500!important;
-    background:rgba(99,102,241,.12)!important;
-    border:1px solid rgba(99,102,241,.22)!important;
-    color:#A78BFA!important;border-radius:20px!important;
-    padding:0 12px!important;
-    transition:all .15s!important;
-}
-.cf-scroll-btn .stButton>button:hover{
-    background:rgba(99,102,241,.25)!important;color:#C4B5FD!important;
-    border-color:rgba(99,102,241,.4)!important;
-}
-.cf-user-bubble {
-    align-self:flex-end;
-    background:linear-gradient(135deg,#7C3AED,#5B21B6);
-    color:#fff !important; font-size:.84rem; line-height:1.6;
-    padding:10px 14px 8px; border-radius:18px 18px 4px 18px;
-    max-width:82%; word-break:break-word;
-    box-shadow:0 3px 16px rgba(109,40,217,.35);
-    animation:cf-msg-in .18s ease forwards;
-}
-.cf-user-bubble * { color:#fff !important; }
-.cf-ai-bubble {
-    align-self:flex-start;
-    background:#161A2E; color:#E5E7EB !important;
-    font-size:.84rem; line-height:1.68;
-    padding:10px 14px 8px; border-radius:4px 18px 18px 18px;
-    max-width:88%; border:1px solid rgba(99,102,241,.15);
-    word-break:break-word; box-shadow:0 2px 12px rgba(0,0,0,.28);
-    animation:cf-msg-in .18s ease forwards;
-}
-.cf-ai-bubble * { color:#E5E7EB !important; }
-.cf-ai-bubble strong { color:#C4B5FD !important; font-weight:600; }
-.cf-ai-bubble em { color:#93C5FD !important; }
-.cf-ai-bubble code {
-    background:rgba(99,102,241,.14); color:#C4B5FD !important;
-    font-size:.76rem; padding:1px 6px; border-radius:4px; font-family:monospace;
-}
-.cf-ai-bubble ol,.cf-ai-bubble ul { margin:6px 0 4px 16px; padding:0; }
-.cf-ai-bubble li { margin-bottom:3px; color:#E5E7EB !important; }
-.cf-ts {
-    font-size:.6rem; color:rgba(156,163,175,.38);
-    margin-top:5px; text-align:right;
-}
-.cf-ai-ts { text-align:left; }
-.cf-empty {
-    flex:1; display:flex; flex-direction:column;
-    align-items:center; justify-content:center;
-    text-align:center; padding:20px; gap:6px;
-}
-.cf-empty-icon { font-size:2.4rem; opacity:.3; margin-bottom:8px; display:block; }
-.cf-empty-title { font-size:.92rem; font-weight:700; color:#6B7280; margin-bottom:4px; }
-.cf-empty-sub { font-size:.74rem; color:#374151; line-height:1.65; max-width:220px; }
-.cf-suggestion {
-    display:inline-block; margin:3px; padding:5px 13px;
-    background:rgba(99,102,241,.08); border:1px solid rgba(99,102,241,.18);
-    border-radius:20px; font-size:.73rem; color:#818CF8;
-    transition:background .15s, border-color .15s;
-}
-.cf-suggestion:hover { background:rgba(99,102,241,.16); border-color:rgba(99,102,241,.32); }
-/* FAB — Streamlit button override when sitting in the float container */
-.cf-fab-wrap button {
-    width:58px !important; height:58px !important;
-    border-radius:50% !important; padding:0 !important;
-    background:linear-gradient(135deg,#8B5CF6,#EC4899) !important;
-    color:#fff !important; font-size:1.45rem !important;
-    border:none !important;
-    box-shadow:0 4px 28px rgba(139,92,246,0.55) !important;
-    transition:transform 0.22s cubic-bezier(.34,1.56,.64,1) !important;
-    animation:fab-pulse 3s ease-in-out infinite !important;
-}
-.cf-fab-wrap button:hover { transform:scale(1.1) !important; }
-/* Close button in chat header */
-.cf-close-btn button {
-    padding:2px 10px !important; font-size:0.75rem !important;
-    border-radius:8px !important; min-height:28px !important;
-    background:rgba(255,255,255,0.06) !important;
-    color:#9CA3AF !important; border:1px solid rgba(255,255,255,0.1) !important;
-}
-.cf-close-btn button:hover { background:rgba(255,255,255,0.12) !important; color:#E5E7EB !important; }
-/* Input row inside float panel */
-.cf-input-row { padding:8px 12px 10px; border-top:1px solid rgba(255,255,255,0.05); }
-.cf-input-row .stTextInput > div > div > input {
-    background:rgba(17,24,39,0.9) !important; border:1px solid rgba(99,102,241,0.25) !important;
-    border-radius:10px !important; color:#E5E7EB !important; font-size:0.83rem !important;
-}
-.cf-input-row .stTextInput > div > div > input:focus {
-    border-color:rgba(139,92,246,0.55) !important; box-shadow:0 0 0 2px rgba(139,92,246,0.15) !important;
-}
-
-/* Nav pill buttons */
-div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button,
-div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn"]) .stButton > button,
-div[data-testid="stHorizontalBlock"]:has(button[key="chat_nav_btn"]) .stButton > button,
-div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn_faq"]) .stButton > button,
-div[data-testid="stHorizontalBlock"]:has(button[key="back_btn"]) .stButton > button {
-    border-radius: 20px !important;
-    background: rgba(29,78,216,0.18) !important;
-    border: 1px solid rgba(59,130,246,0.55) !important;
-    color: #93C5FD !important;
-    font-weight: 600 !important;
-}
-div[data-testid="stHorizontalBlock"]:has(button[key="faq_nav_btn"]) .stButton > button:hover,
-div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn"]) .stButton > button:hover,
-div[data-testid="stHorizontalBlock"]:has(button[key="chat_nav_btn"]) .stButton > button:hover,
-div[data-testid="stHorizontalBlock"]:has(button[key="settings_btn_faq"]) .stButton > button:hover,
-div[data-testid="stHorizontalBlock"]:has(button[key="back_btn"]) .stButton > button:hover {
-    background: rgba(29,78,216,0.40) !important;
-    border-color: #3B82F6 !important;
-    color: #fff !important;
-}
-
-@keyframes fab-pulse {
-    0%,100% { box-shadow:0 4px 28px rgba(139,92,246,0.55),0 0 0 0 rgba(139,92,246,0.25); }
-    50%      { box-shadow:0 4px 28px rgba(139,92,246,0.55),0 0 0 10px rgba(139,92,246,0); }
-}
-
-/* ══ SUPPORT QUICK SHEET ══════════════════════════════════ */
-.sqna-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 12px;
-    padding: 4px 0 28px;
-}
-.sqna-card {
-    background: #111827;
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 12px;
-    padding: 14px 16px;
-    transition: border-color 0.18s, box-shadow 0.18s;
-}
-.sqna-card:hover {
-    border-color: rgba(99,102,241,0.38);
-    box-shadow: 0 4px 18px rgba(99,102,241,0.10);
-}
-.sqna-q {
-    font-size: 0.84rem;
-    font-weight: 600;
-    color: #E5E7EB;
-    margin-bottom: 7px;
-    line-height: 1.45;
-}
-.sqna-a {
-    font-size: 0.81rem;
+.setting-value {
+    font-size: 0.8rem;
     color: #94A3B8;
-    line-height: 1.6;
+    font-family: 'Monaco', monospace;
 }
-.sqna-tag {
-    display: inline-block;
-    font-size: 0.66rem;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 20px;
-    margin-bottom: 7px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-}
-.sqna-tag-doc  { background:rgba(59,130,246,0.14); color:#60A5FA; border:1px solid rgba(59,130,246,0.22); }
-.sqna-tag-wa   { background:rgba(16,185,129,0.13); color:#34D399; border:1px solid rgba(16,185,129,0.20); }
-.sqna-tag-rlqa { background:rgba(245,158,11,0.12); color:#FCD34D; border:1px solid rgba(245,158,11,0.20); }
-.sqna-tag-kb   { background:rgba(139,92,246,0.14); color:#A78BFA; border:1px solid rgba(139,92,246,0.22); }
-.sqna-cat-pill {
-    font-size: 0.67rem;
-    color: #475569;
-    margin-top: 8px;
-    border-top: 1px solid rgba(255,255,255,0.05);
-    padding-top: 6px;
-}
-.sqna-steps { display:flex; flex-direction:column; gap:5px; margin-top:2px; }
-.sqna-step  { display:flex; gap:8px; align-items:flex-start; font-size:0.81rem; color:#94A3B8; line-height:1.5; }
-.sqna-step-n {
-    flex-shrink:0; width:19px; height:19px; border-radius:50%;
-    background:rgba(99,102,241,0.20); color:#A78BFA;
-    font-size:0.66rem; font-weight:700;
-    display:flex; align-items:center; justify-content:center; margin-top:1px;
-}
+
 </style>
 """, unsafe_allow_html=True)
 
+# ══════════════════════════════════════════════════════════════════
+#  TOP NAVIGATION
+# ══════════════════════════════════════════════════════════════════
+st.markdown("""
+<div class="topnav">
+    <div class="topnav-brand">
+        <div class="dot">💬</div>
+        <span class="name">Convin Support</span>
+    </div>
+    <div class="topnav-status">
+        <div class="live-dot"></div>
+        <span>Live & Ready</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════
-#  STORAGE  —  Neon (serverless Postgres)
+#  INITIALIZATION
+# ══════════════════════════════════════════════════════════════════
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+
+if "voice_call_active" not in st.session_state:
+    st.session_state.voice_call_active = False
+
+if "voice_call_duration" not in st.session_state:
+    st.session_state.voice_call_duration = 0
+
+# ══════════════════════════════════════════════════════════════════
+#  DATABASE FUNCTIONS
 # ══════════════════════════════════════════════════════════════════
 @st.cache_resource
-def _neon_conn():
-    conn = psycopg2.connect(st.secrets["NEON_DATABASE_URL"])
-    conn.autocommit = True
-    with conn.cursor() as cur:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS kb_store (
-                id INTEGER PRIMARY KEY,
-                data JSONB NOT NULL DEFAULT '{}'::jsonb
-            )
-        """)
-        cur.execute("""
-            INSERT INTO kb_store (id, data) VALUES (1, '{}'::jsonb)
-            ON CONFLICT (id) DO NOTHING
-        """)
-    return conn
-
-def _db():
-    conn = _neon_conn()
+def get_db_connection():
+    """Connect to Supabase/PostgreSQL"""
     try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-    except Exception:
-        _neon_conn.clear()
-        conn = _neon_conn()
-    return conn
-
-def load_kb():
-    if st.session_state.get("_kb_loaded"):
-        return
-    try:
-        with _db().cursor() as cur:
-            cur.execute("SELECT data FROM kb_store WHERE id = 1")
-            row = cur.fetchone()
-            if row:
-                d = row[0]
-                for k in KB_KEYS:
-                    st.session_state[k] = d.get(k, [])
-                st.session_state["kb_client_qas"] = d.get("kb_client_qas", {})
-                st.session_state["show_sources"] = d.get("show_sources", False)
-    except Exception:
-        pass
-    st.session_state["_kb_loaded"] = True
-
-def save_kb():
-    data = {k: st.session_state.get(k, []) for k in KB_KEYS}
-    data["kb_client_qas"] = st.session_state.get("kb_client_qas", {})
-    data["show_sources"] = st.session_state.get("show_sources", False)
-    try:
-        with _db().cursor() as cur:
-            cur.execute(
-                "UPDATE kb_store SET data = %s WHERE id = 1",
-                (psycopg2.extras.Json(data),)
-            )
-    except Exception:
-        pass
-
-def kb_stats():
-    docs  = len(st.session_state.get("kb_documents", []))
-    links = len(st.session_state.get("kb_links",     []))
-    wa    = len(st.session_state.get("kb_whatsapp",  []))
-    pages = len(st.session_state.get("kb_crawled",   []))
-    return docs, links, wa, pages
-
-def total_sources():
-    return sum(kb_stats())
-
-
-# ══════════════════════════════════════════════════════════════════
-#  SESSION STATE
-# ══════════════════════════════════════════════════════════════════
-_DEFAULTS = {
-    "page":               "faq",
-    "chat_open":          False,
-    "chat_minimized":     False,
-    "chat_history":       [],
-    "_last_input":        "",
-    "_mini_last":         "",
-    "quick_q":            "",
-    "show_sources":       False,
-    "_kb_loaded":         False,
-    "kb_faqs":            [],
-    "kb_client_qas":      {},
-    "cqa_selected":       "",
-    "cqa_edit_id":        "",
-    "rlqa_edit_id":       "",
-    **{k: [] for k in KB_KEYS},
-}
-for k, v in _DEFAULTS.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-load_kb()
-
-# Handle FAB / link navigation via query params
-if "nav" in st.query_params:
-    _nav_target = st.query_params["nav"]
-    st.query_params.clear()
-    if _nav_target == "chat":
-        st.session_state.chat_open = True   # open panel, don't leave the page
-    elif _nav_target in ("faq", "settings"):
-        st.session_state.page = _nav_target
-
-
-# ══════════════════════════════════════════════════════════════════
-#  FILE PARSERS
-# ══════════════════════════════════════════════════════════════════
-def _ext(filename): return filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-
-def FILE_ICON(ext):
-    return {
-        "pdf":"📄","txt":"📝","md":"📝","docx":"📋","doc":"📋","odt":"📋",
-        "xlsx":"📊","xls":"📊","xlsm":"📊","ods":"📊","csv":"📊",
-        "pptx":"🖼️","ppt":"🖼️","odp":"🖼️",
-        "html":"🌐","htm":"🌐","mhtml":"🌐","xhtml":"🌐",
-        "json":"🗂️","jsonl":"🗂️","yaml":"🗂️","xml":"🗂️",
-        "epub":"📚","rtf":"📄","eml":"📧","msg":"📧",
-        "ipynb":"📓","py":"🐍","js":"📜","ts":"📜","sql":"🗄️",
-        "sh":"⚙️","rb":"💎","go":"🐹","rs":"⚙️","java":"☕",
-    }.get(ext, "📎")
-
-def parse_file(f) -> str:
-    import io
-    name = f.name.lower(); raw = f.read(); ext = _ext(name)
-
-    # ── Plain-text formats (direct decode) ───────────────────────
-    PLAIN_TEXT = {
-        "txt","md","markdown","rst","log","csv","tsv",
-        "yaml","yml","toml","ini","cfg","env",
-        "sh","bash","zsh","fish",
-        "py","js","ts","jsx","tsx","mjs","cjs",
-        "json","jsonl","ndjson",
-        "sql","r","rb","php","java","cpp","c","h","hpp",
-        "go","rs","swift","kt","cs","lua","tex","scala","pl",
-        "xml","svg","rss","atom",
-    }
-    if ext in PLAIN_TEXT:
-        return raw.decode("utf-8", errors="ignore")
-
-    # ── HTML / HTM — strip tags, keep readable text ───────────────
-    if ext in ("html","htm","mhtml","mht","xhtml"):
-        try:
-            from bs4 import BeautifulSoup as BS
-            soup = BS(raw.decode("utf-8","ignore"), "html.parser")
-            for tag in soup(["script","style","nav","footer","header",
-                             "aside","noscript","meta","link"]):
-                tag.decompose()
-            title = soup.title.string.strip() if soup.title else ""
-            text  = soup.get_text("\n", strip=True)
-            return (f"[Title: {title}]\n\n" if title else "") + text
-        except Exception as e:
-            return raw.decode("utf-8","ignore")
-
-    # ── PDF ───────────────────────────────────────────────────────
-    if ext == "pdf":
-        try:
-            import pdfplumber
-            with pdfplumber.open(io.BytesIO(raw)) as pdf:
-                return "\n\n".join(p.extract_text() or "" for p in pdf.pages)
-        except Exception:
-            try:
-                import PyPDF2
-                r = PyPDF2.PdfReader(io.BytesIO(raw))
-                return "\n\n".join(p.extract_text() or "" for p in r.pages)
-            except Exception as e: return f"[PDF error: {e}]"
-
-    # ── Word ──────────────────────────────────────────────────────
-    if ext in ("docx","doc","odt"):
-        try:
-            import docx
-            d = docx.Document(io.BytesIO(raw))
-            parts = [p.text for p in d.paragraphs if p.text.strip()]
-            for tbl in d.tables:
-                for row in tbl.rows:
-                    parts.append(" | ".join(c.text for c in row.cells))
-            return "\n".join(parts)
-        except Exception as e: return f"[DOCX error: {e}]"
-
-    # ── Excel ─────────────────────────────────────────────────────
-    if ext in ("xlsx","xls","xlsm","ods"):
-        try:
-            import openpyxl
-            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
-            parts = []
-            for sn in wb.sheetnames:
-                ws = wb[sn]; parts.append(f"=== Sheet: {sn} ===")
-                for row in ws.iter_rows(values_only=True):
-                    s = " | ".join(str(c) for c in row if c is not None)
-                    if s.strip(): parts.append(s)
-            return "\n".join(parts)
-        except Exception as e: return f"[Excel error: {e}]"
-
-    # ── PowerPoint ────────────────────────────────────────────────
-    if ext in ("pptx","ppt","odp"):
-        try:
-            from pptx import Presentation
-            prs = Presentation(io.BytesIO(raw)); parts = []
-            for i,sl in enumerate(prs.slides,1):
-                parts.append(f"=== Slide {i} ===")
-                for sh in sl.shapes:
-                    if hasattr(sh,"text") and sh.text.strip(): parts.append(sh.text)
-            return "\n".join(parts)
-        except Exception as e: return f"[PPTX error: {e}]"
-
-    # ── RTF ───────────────────────────────────────────────────────
-    if ext == "rtf":
-        try:
-            from striprtf.striprtf import rtf_to_text
-            return rtf_to_text(raw.decode("utf-8","ignore"))
-        except Exception as e: return f"[RTF error: {e}]"
-
-    # ── EPUB ──────────────────────────────────────────────────────
-    if ext == "epub":
-        try:
-            import ebooklib; from ebooklib import epub; from bs4 import BeautifulSoup as BS
-            book = epub.read_epub(io.BytesIO(raw)); parts = []
-            for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
-                soup = BS(item.get_content(),"html.parser")
-                t = soup.get_text(" ",strip=True)
-                if t: parts.append(t)
-            return "\n\n".join(parts)
-        except Exception as e: return f"[EPUB error: {e}]"
-
-    # ── Email (.eml / .msg) ───────────────────────────────────────
-    if ext in ("eml","msg"):
-        try:
-            import email
-            msg = email.message_from_bytes(raw)
-            parts = []
-            for hdr in ("From","To","Subject","Date"):
-                if msg.get(hdr): parts.append(f"{hdr}: {msg[hdr]}")
-            parts.append("")
-            for part in msg.walk():
-                ct = part.get_content_type()
-                if ct == "text/plain":
-                    parts.append(part.get_payload(decode=True).decode("utf-8","ignore"))
-                elif ct == "text/html":
-                    try:
-                        from bs4 import BeautifulSoup as BS
-                        parts.append(BS(part.get_payload(decode=True),"html.parser").get_text("\n",strip=True))
-                    except Exception:
-                        pass
-            return "\n".join(parts)
-        except Exception as e: return f"[EML error: {e}]"
-
-    # ── Notebook (.ipynb) ─────────────────────────────────────────
-    if ext == "ipynb":
-        try:
-            nb = json.loads(raw.decode("utf-8","ignore"))
-            parts = []
-            for cell in nb.get("cells",[]):
-                ct = cell.get("cell_type","")
-                src = "".join(cell.get("source",[]))
-                if ct == "markdown":
-                    parts.append(src)
-                elif ct == "code":
-                    parts.append(f"```python\n{src}\n```")
-                for out in cell.get("outputs",[]):
-                    text = "".join(out.get("text",""))
-                    if text: parts.append(text)
-            return "\n\n".join(parts)
-        except Exception as e: return f"[IPYNB error: {e}]"
-
-    # ── Fallback: try raw text decode ─────────────────────────────
-    for enc in ("utf-8","latin-1","cp1252"):
-        try: return raw.decode(enc)
-        except: continue
-    return f"[Unsupported format: {f.name}]"
-
-
-# ══════════════════════════════════════════════════════════════════
-#  WEB HELPERS
-# ══════════════════════════════════════════════════════════════════
-def _http(url):
-    import requests
-    return requests.get(url, headers={"User-Agent":"Mozilla/5.0 (ConvinBot/1.0)"}, timeout=12)
-
-def _scrape(soup, url):
-    for t in soup(["script","style","nav","footer","header","aside","noscript"]):
-        t.decompose()
-    title = (soup.title.string.strip() if soup.title else url)[:120]
-    text  = "\n".join(
-        p.get_text(" ",strip=True)
-        for p in soup.find_all(["p","h1","h2","h3","h4","li","td","blockquote"])
-        if len(p.get_text(strip=True)) > 25
-    )
-    return title, text[:16000]
-
-def fetch_url(url):
-    try:
-        from bs4 import BeautifulSoup
-        r = _http(url); r.raise_for_status()
-        return _scrape(BeautifulSoup(r.text,"html.parser"), url)
+        db_url = st.secrets.get("DATABASE_URL")
+        if not db_url:
+            return None
+        conn = psycopg2.connect(db_url)
+        return conn
     except Exception as e:
-        return url, f"[Error: {e}]"
+        st.error(f"Database connection failed: {e}")
+        return None
 
-_WA_SKIP = {
-    "<Media omitted>", "This message was deleted", "image omitted",
-    "video omitted", "audio omitted", "sticker omitted", "document omitted",
-    "GIF omitted", "Contact card omitted", "Missed voice call",
-    "Missed video call", "null", "",
-}
+def save_chat_message(user_id: str, role: str, message: str, session_id: str):
+    """Save chat message to database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
 
-# WhatsApp message patterns — iOS and Android, 12h and 24h
-_WA_PATTERNS = [
-    # iOS:     [DD/MM/YYYY, HH:MM:SS] Sender: Msg
-    re.compile(r"^\[(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}),\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)\]\s+([^:]+):\s*(.*)"),
-    # Android: DD/MM/YYYY, HH:MM - Sender: Msg
-    re.compile(r"^(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AaPp][Mm])?)\s*[-–]\s*([^:]+):\s*(.*)"),
-]
-
-def _wa_match(line: str):
-    """Try all WA patterns; return (date, time, sender, msg) or None."""
-    for pat in _WA_PATTERNS:
-        m = pat.match(line.strip())
-        if m:
-            return m.group(1), m.group(2).strip(), m.group(3).strip(), m.group(4).strip()
-    return None
-
-def parse_wa(raw: str) -> str:
-    """Parse a WhatsApp export preserving full [date time] Sender: message format."""
-    lines_out = []
-    for ln in raw.split("\n"):
-        s = ln.strip()
-        if not s:
-            continue
-        hit = _wa_match(s)
-        if hit:
-            date, time_, sender, msg = hit
-            if not msg or msg in _WA_SKIP or any(sk.lower() in msg.lower() for sk in _WA_SKIP):
-                continue
-            lines_out.append(f"[{date} {time_}] {sender}: {msg}")
-        elif lines_out:
-            lines_out[-1] = lines_out[-1] + " " + s  # continuation
-    return "\n".join(lines_out)
-
-def parse_wa_meta(content: str) -> dict:
-    """Extract chat metadata for the Answer Studio pre-analysis header."""
-    messages = []
-    for ln in content.split("\n"):
-        hit = _wa_match(ln)
-        if hit:
-            date, time_, sender, msg = hit
-            messages.append({"date": date, "time": time_, "sender": sender, "text": msg})
-
-    if not messages:
-        return {"valid": False, "total": 0, "participants": [], "date_range": ""}
-
-    participants = list(dict.fromkeys(m["sender"] for m in messages))
-    counts = {}
-    for m in messages:
-        counts[m["sender"]] = counts.get(m["sender"], 0) + 1
-
-    return {
-        "valid": True,
-        "total": len(messages),
-        "participants": participants,
-        "msg_counts": counts,
-        "first_date": messages[0]["date"],
-        "last_date": messages[-1]["date"],
-        "date_range": f"{messages[0]['date']} → {messages[-1]['date']}",
-    }
-
-
-def parse_wa_html(html_content: str) -> tuple[str, dict]:
-    """Parse a WhatsApp HTML export (from phone share as HTML).
-    Returns (parsed_text, meta) in same format as parse_wa + parse_wa_meta."""
     try:
-        from bs4 import BeautifulSoup as _BS
-    except ImportError:
-        return "", {"valid": False, "total": 0, "participants": [], "date_range": ""}
-
-    soup = _BS(html_content, "html.parser")
-    messages = []
-    current_date = ""
-
-    for el in soup.select(".date-divider, .msg-row"):
-        classes = el.get("class", [])
-        if "date-divider" in classes:
-            span = el.find("span")
-            if span:
-                current_date = span.get_text(strip=True)
-        elif "msg-row" in classes:
-            sender_el = el.find(class_="sender")
-            time_el   = el.find(class_="time")
-            text_el   = el.find(class_="text")
-            if not (sender_el and text_el):
-                continue
-            sender = sender_el.get_text(strip=True)
-            time_  = time_el.get_text(strip=True) if time_el else ""
-            text   = text_el.get_text(" ", strip=True)
-            if not text or len(text) < 3 or text in _WA_SKIP:
-                continue
-            messages.append({"date": current_date, "time": time_, "sender": sender, "text": text})
-
-    if not messages:
-        # Fallback: try generic HTML text extraction + parse as WA txt
-        plain = soup.get_text("\n")
-        parsed = parse_wa(plain)
-        meta = parse_wa_meta(parsed)
-        return parsed, meta
-
-    lines = [f"[{m['date']} {m['time']}] {m['sender']}: {m['text']}" for m in messages]
-    content = "\n".join(lines)
-
-    participants = list(dict.fromkeys(m["sender"] for m in messages))
-    counts = {s: sum(1 for m in messages if m["sender"] == s) for s in participants}
-    meta = {
-        "valid": True,
-        "total": len(messages),
-        "participants": participants,
-        "msg_counts": counts,
-        "first_date": messages[0]["date"] if messages else "",
-        "last_date":  messages[-1]["date"] if messages else "",
-        "date_range": f"{messages[0]['date']} → {messages[-1]['date']}" if messages else "",
-        "file_type": "whatsapp_html",
-    }
-    return content, meta
-
-
-def crawl_site(root, max_p, status_ph, prog_ph):
-    try:
-        import requests; from bs4 import BeautifulSoup
-    except ImportError:
-        return 0
-    pr = urlparse(root); base = f"{pr.scheme}://{pr.netloc}"; host = pr.netloc
-    SKIP = {".pdf",".png",".jpg",".jpeg",".gif",".svg",".zip",".exe",
-            ".mp4",".mp3",".webp",".ico",".css",".js",".woff",".ttf"}
-    def ok(h):
-        p = urlparse(h)
-        return (not p.netloc or p.netloc==host) and \
-               not any(p.path.lower().endswith(e) for e in SKIP) and \
-               p.scheme in ("http","https","")
-    visited = set(); queue = [root]; done = 0
-    existing = {p["url"] for p in st.session_state.kb_crawled}; new_pages = []
-    while queue and done < max_p:
-        url = queue.pop(0).split("#")[0].rstrip("/") or root
-        if url in visited: continue
-        visited.add(url)
-        try:
-            resp = _http(url)
-            if "text/html" not in resp.headers.get("Content-Type",""): continue
-            soup = BeautifulSoup(resp.text,"html.parser")
-            for a in soup.find_all("a",href=True):
-                h = urljoin(base,a["href"]).split("#")[0].rstrip("/")
-                if ok(h) and h not in visited: queue.append(h)
-            title, text = _scrape(soup, url)
-            if not text.strip(): continue
-            done += 1
-            pg = {"url":url,"title":title,"content":text,
-                  "added_at":datetime.now().isoformat(),"size":len(text)}
-            if url not in existing:
-                new_pages.append(pg); existing.add(url)
-            prog_ph.progress(min(done/max_p,1.0))
-            status_ph.caption(f"🕷️  {done}/{max_p} — {url[:60]}")
-        except Exception: continue
-    st.session_state.kb_crawled.extend(new_pages)
-    prog_ph.empty(); status_ph.empty()
-    return done
-
-
-# ══════════════════════════════════════════════════════════════════
-#  KNOWLEDGE BASE CONTEXT
-# ══════════════════════════════════════════════════════════════════
-def build_context():
-    """Return (full_context_string, list_of_source_names)."""
-    parts, names = [], []
-    for d in st.session_state.kb_documents:
-        parts.append(f"=== DOCUMENT: {d['name']} ===\n{d['content']}")
-        names.append(d["name"])
-    for l in st.session_state.kb_links:
-        parts.append(f"=== WEBSITE: {l['title']} ===\n{l['content']}")
-        names.append(l["title"])
-    for w in st.session_state.kb_whatsapp:
-        parts.append(f"=== WHATSAPP CHAT: {w['name']} ===\n{w['content']}")
-        names.append(w["name"])
-    for p in st.session_state.kb_crawled:
-        parts.append(f"=== PAGE: {p['title']} ===\n{p['content']}")
-        names.append(p["title"])
-    ctx = "\n\n".join(parts)
-    return ctx[:MAX_CTX], names
-
-
-def build_chat_context() -> tuple[str, list[str]]:
-    """Build rich context for chat — FAQs + Real Life Q&A + Client Q&A + docs."""
-    parts, names = [], []
-
-    # Main Q&A store (includes WhatsApp, Client Learnings, generic)
-    faqs = st.session_state.get("kb_faqs", [])
-    if faqs:
-        qa_lines = [f"Q: {f['question']}\nA: {f['answer']}" for f in faqs]
-        parts.append("=== Q&A KNOWLEDGE BASE ===\n" + "\n\n".join(qa_lines))
-        names.append(f"{len(faqs)} Q&A pairs")
-
-    # Real Life Q&A (Convin Sense-specific from uploaded files)
-    rlqa = st.session_state.get("kb_rlqa_qas", [])
-    if rlqa:
-        rl_lines = [f"Q: {f['question']}\nA: {f['answer']}" for f in rlqa]
-        parts.append("=== REAL LIFE Q&A ===\n" + "\n\n".join(rl_lines))
-        names.append(f"{len(rlqa)} real-life Q&As")
-
-    # Per-client Q&A (aggregate all clients)
-    client_qas = st.session_state.get("kb_client_qas", {})
-    all_cqas = [qa for qas in client_qas.values() for qa in qas]
-    if all_cqas:
-        cq_lines = [f"Q: {f['question']}\nA: {f['answer']}" for f in all_cqas]
-        parts.append("=== CLIENT-SPECIFIC Q&A ===\n" + "\n\n".join(cq_lines))
-        names.append(f"{len(all_cqas)} client Q&As")
-
-    # Documents (truncated for speed)
-    for d in st.session_state.get("kb_documents", []):
-        parts.append(f"=== DOCUMENT: {d['name']} ===\n{d['content'][:8000]}")
-        names.append(d["name"])
-
-    ctx = "\n\n".join(parts)
-    return ctx[:120_000], names
-
-
-# ══════════════════════════════════════════════════════════════════
-#  CLAUDE  —  full context, prompt caching
-# ══════════════════════════════════════════════════════════════════
-def get_client():
-    key = st.secrets.get("ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_API_KEY",""))
-    if not key:
-        raise ValueError("⚠️ ANTHROPIC_API_KEY is not configured. Ask your admin to set it in Streamlit secrets.")
-    if not key.startswith("sk-ant-"):
-        raise ValueError("⚠️ ANTHROPIC_API_KEY has invalid format (should start with 'sk-ant-'). Check if the key is correct.")
-    return anthropic.Anthropic(api_key=key)
-
-def ask_claude(query: str) -> tuple[str, list[str]]:
-    ctx, names = build_context()
-    if not ctx.strip():
-        return (
-            "I don't have any knowledge base loaded yet. "
-            "Please ask your admin to add documents or resources.",
-            [],
-        )
-
-    client = get_client()
-
-    SYSTEM_INSTRUCTIONS = (
-        "You are a professional Customer Support AI for Convin.\n\n"
-        "Behavior:\n"
-        "• Answer ONLY from the knowledge base provided — never fabricate facts.\n"
-        "• Read the ENTIRE knowledge base before responding, including WhatsApp chats.\n"
-        "• Structure every response:\n"
-        "    1. Direct answer (1–2 sentences)\n"
-        "    2. Steps or details (numbered list if 3+ steps, otherwise inline)\n"
-        "    3. Brief explanation (only if it adds value)\n"
-        "    4. Friendly closing line\n"
-        "• Use **bold** for key terms, product names, and important values.\n"
-        "• Keep answers concise — no filler words, no repetition.\n"
-        "• If the answer is NOT in the knowledge base, respond with:\n"
-        "  \"This might need further verification — let me connect you with "
-        "the right person from our team.\"\n"
-        "• For WhatsApp conversations: ALWAYS cite the source with this exact format:\n"
-        "  > 💬 Chatted by [Sender Name] at [Time] on [Date]\n"
-        "  Include the actual sender name, time, and date from the message metadata.\n"
-        "• Do NOT say 'based on the document' or 'according to the file' for documents.\n"
-        "• Do NOT reveal file names or document titles in answers.\n"
-        "• WhatsApp references are valuable citations — always include them when used.\n"
-    )
-
-    system = [
-        {"type": "text", "text": SYSTEM_INSTRUCTIONS},
-        {"type": "text", "text": "KNOWLEDGE BASE:\n" + ctx,
-         "cache_control": {"type": "ephemeral"}},
-    ]
-
-    history = [{"role": m["role"], "content": m["content"]}
-               for m in st.session_state.chat_history[-10:]]
-    history.append({"role": "user", "content": query})
-
-    r = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=900,
-        system=system,
-        messages=history,
-        extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-    )
-    return r.content[0].text, names
-
-
-def ask_claude_stream(query: str, placeholder) -> tuple[str, list[str]]:
-    """Stream Claude response token-by-token into a Streamlit placeholder."""
-    ctx, names = build_chat_context()
-    if not ctx.strip():
-        msg = ("I don't have any knowledge base loaded yet. "
-               "Please ask your admin to add documents or resources.")
-        placeholder.markdown(msg)
-        return msg, []
-
-    SYSTEM = (
-        "You are a friendly, sharp customer support agent for Convin Sense (AI voice bot platform).\n"
-        "RULES — follow strictly:\n"
-        "• Reply in 2–4 short sentences MAX. No long paragraphs.\n"
-        "• Be warm but direct — like a helpful human support rep, not a textbook.\n"
-        "• Lead with the answer immediately. No preamble like 'Great question!' or 'Sure!'.\n"
-        "• Use **bold** only for the single most important fact or number.\n"
-        "• If the answer has steps, use a tight numbered list (3 items max).\n"
-        "• End with one short follow-up offer, e.g. 'Want more detail on any step?'\n"
-        "• If genuinely not in the KB: 'I don't have that info — I'll flag it for the team.'\n"
-        "• Never bullet-dump or write essays.\n"
-    )
-    system = [
-        {"type": "text", "text": SYSTEM},
-        {"type": "text", "text": "KNOWLEDGE BASE:\n" + ctx,
-         "cache_control": {"type": "ephemeral"}},
-    ]
-    history = [{"role": m["role"], "content": m["content"]}
-               for m in st.session_state.chat_history[-6:]]
-    history.append({"role": "user", "content": query})
-
-    placeholder.markdown("*Thinking…*")
-    full_text = ""
-    last_ui = 0.0
-    try:
-        client = get_client()
-        with client.messages.stream(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=350,
-            system=system,
-            messages=history,
-            extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-        ) as stream:
-            for text in stream.text_stream:
-                full_text += text
-                now = time.time()
-                if now - last_ui >= 0.06:          # ~16 UI updates/sec max
-                    placeholder.markdown(full_text + " ▌")
-                    last_ui = now
-        placeholder.markdown(full_text)
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO support_chats (session_id, user_id, role, message, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+        """, (session_id, user_id, role, message, datetime.now()))
+        conn.commit()
+        cur.close()
+        return True
     except Exception as e:
-        full_text = f"⚠️ Error: {type(e).__name__}: {str(e)}"
-        placeholder.markdown(full_text)
+        st.error(f"Failed to save message: {e}")
+        return False
+    finally:
+        conn.close()
 
-    return full_text, names
+def save_voice_call(user_id: str, session_id: str, duration: int, status: str):
+    """Save voice call record to database"""
+    conn = get_db_connection()
+    if not conn:
+        return False
 
-
-# ══════════════════════════════════════════════════════════════════
-#  FAQ GENERATOR
-# ══════════════════════════════════════════════════════════════════
-def _faq_call(client, prompt: str) -> list[dict]:
-    """Single Claude call → parsed FAQ list."""
-    r = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=16000,
-        messages=[{
-            "role": "user",
-            "content": [{"type": "text", "text": prompt,
-                         "cache_control": {"type": "ephemeral"}}],
-        }],
-        extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-    )
-    raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
-    raw = re.sub(r"\n?```$", "", raw)
     try:
-        items = json.loads(raw)
-    except json.JSONDecodeError:
-        pairs = re.findall(
-            r'"question"\s*:\s*"([^"]+)"[^}]*"answer"\s*:\s*"([^"]+)"', raw
-        )
-        return [{"category": "General", "question": q, "answer": a} for q, a in pairs]
-    return [
-        {
-            "category": str(i.get("category", "General")),
-            "question": str(i.get("question", i.get("q", ""))),
-            "answer":   str(i.get("answer",   i.get("a", ""))),
-        }
-        for i in items if isinstance(i, dict) and i.get("question")
-    ]
-
-
-def generate_faqs(progress_cb=None) -> list[dict]:
-    """Multi-pass FAQ generation — one full Claude call per source type.
-
-    progress_cb(pct, label) is called after each pass so the UI can update.
-    """
-    client  = get_client()
-    all_faqs: list[dict] = []
-
-    BASE_RULES = (
-        "Rules:\n"
-        "• Only include facts present in the content — never invent.\n"
-        "• Be EXHAUSTIVE: cover every topic, feature, process, policy, edge case, "
-        "decision, question, issue, and fact — no matter how minor.\n"
-        "• Each answer: 2–6 sentences or a short bullet list.\n"
-        "• Group into specific, descriptive categories.\n"
-        "• Return ONLY a raw JSON array (no markdown, no extra text):\n"
-        '[\n  {"category":"Name","question":"Q?","answer":"A."},\n  ...\n]\n'
-    )
-
-    # ── Pass 1: Documents ─────────────────────────────────────────
-    docs = st.session_state.get("kb_documents", [])
-    if docs:
-        ctx = "\n\n".join(
-            f"=== DOCUMENT: {d['name']} ===\n{d['content']}" for d in docs
-        )[:MAX_CTX]
-        prompt = (
-            "You are extracting the maximum possible FAQs from uploaded documents.\n"
-            "Read every sentence. Extract every question a user could ever ask.\n\n"
-            + BASE_RULES +
-            "\nExtract the MAXIMUM number of Q&A pairs possible.\n\n"
-            "DOCUMENTS:\n" + ctx
-        )
-        if progress_cb: progress_cb(0.15, f"📄 Processing {len(docs)} document(s)…")
-        try:
-            all_faqs.extend(_faq_call(client, prompt))
-        except Exception:
-            pass
-
-    # ── Pass 2: Web links + crawled pages ────────────────────────
-    web = st.session_state.get("kb_links", []) + st.session_state.get("kb_crawled", [])
-    if web:
-        ctx = "\n\n".join(
-            f"=== PAGE: {p.get('title', p.get('url',''))} ===\n{p['content']}"
-            for p in web
-        )[:MAX_CTX]
-        prompt = (
-            f"You are extracting the maximum possible FAQs from {len(web)} web page(s).\n"
-            "Read every sentence. Extract every question a user could ever ask.\n\n"
-            + BASE_RULES +
-            "\nExtract the MAXIMUM number of Q&A pairs possible.\n\n"
-            "WEB PAGES:\n" + ctx
-        )
-        if progress_cb: progress_cb(0.45, f"🌐 Processing {len(web)} web page(s)…")
-        try:
-            all_faqs.extend(_faq_call(client, prompt))
-        except Exception:
-            pass
-
-    # ── Pass 3 & 4: WhatsApp — two deep-extraction passes per chat ──
-    wa_chats = st.session_state.get("kb_whatsapp", [])
-    if wa_chats:
-        total_wa = len(wa_chats)
-        for wi, chat in enumerate(wa_chats):
-            content = chat.get("content", "").strip()
-            if not content:
-                continue
-
-            meta = parse_wa_meta(content)
-            plist = ", ".join(meta["participants"]) if meta["valid"] else "unknown"
-            drange = meta.get("date_range", "")
-            total_msg = meta.get("total", "?")
-
-            pct_a = 0.60 + (wi / total_wa) * 0.15
-            pct_b = pct_a + 0.07
-
-            CITE_RULE = (
-                "CITATION RULE — every answer MUST end with one of:\n"
-                "  • Single person: '💬 [Name] on [Date] at [Time]'\n"
-                "  • Exchange: '💬 [Name1] asked, [Name2] replied on [Date]'\n"
-                "  • Group: '💬 Discussed by [Name1], [Name2] on [Date]'\n"
-                "Use the actual names, dates, and times from the messages.\n\n"
-            )
-
-            HEADER = (
-                f"WhatsApp chat: {chat['name']}\n"
-                f"Participants: {plist}\n"
-                f"Date range: {drange}  |  Messages: {total_msg}\n\n"
-                "Each line format: [DD/MM/YY HH:MM] Sender: Message\n\n"
-            )
-
-            # ── Sub-pass A: Direct Q&As + Decisions + Action items ──
-            if progress_cb:
-                progress_cb(pct_a, f"💬 Chat {wi+1}/{total_wa} — extracting Q&As, decisions, actions…")
-            prompt_a = (
-                "You are a knowledge analyst. Deeply read this WhatsApp conversation.\n\n"
-                + HEADER
-                + CITE_RULE
-                + "EXTRACT THESE THREE TYPES (be exhaustive):\n\n"
-                "TYPE 1 — QUESTIONS & ANSWERS\n"
-                "Find every explicit question (ends with ?, starts with how/what/when/why/who/where/can/should/is/are/do/does/will/would) "
-                "AND every implied question (topic raised that others responded to). "
-                "Pair each with its answer from the conversation.\n"
-                "→ Category: 'WhatsApp: Questions & Answers'\n\n"
-                "TYPE 2 — DECISIONS & AGREEMENTS\n"
-                "Find everything agreed upon, confirmed, resolved, or decided. "
-                "Look for: 'agreed', 'decided', 'confirmed', 'let's go with', 'we'll', 'done', 'sorted', 'ok let's'.\n"
-                "→ Category: 'WhatsApp: Decisions & Agreements'\n\n"
-                "TYPE 3 — ACTION ITEMS & TASKS\n"
-                "Find every task assigned, promise made, or next step defined. "
-                "Look for: 'will do', 'I'll', 'you need to', 'please', 'can you', 'by [date]', 'follow up'.\n"
-                "→ Category: 'WhatsApp: Action Items & Tasks'\n\n"
-                "Return ONLY raw JSON array:\n"
-                '[\n  {"category":"WhatsApp: Questions & Answers","question":"Q?","answer":"A. 💬 ..."},\n  ...\n]\n\n'
-                "Be exhaustive — extract every single instance.\n\n"
-                "CHAT:\n" + content[:MAX_CTX]
-            )
-            try:
-                all_faqs.extend(_faq_call(client, prompt_a))
-            except Exception:
-                pass
-
-            # ── Sub-pass B: Information + Problems + Context + Insights ──
-            if progress_cb:
-                progress_cb(pct_b, f"💬 Chat {wi+1}/{total_wa} — extracting knowledge, issues, insights…")
-            prompt_b = (
-                "You are a knowledge analyst. Deeply read this WhatsApp conversation.\n\n"
-                + HEADER
-                + CITE_RULE
-                + "EXTRACT THESE FOUR TYPES (be exhaustive):\n\n"
-                "TYPE 4 — INFORMATION & KNOWLEDGE SHARED\n"
-                "Find every fact, figure, process, instruction, contact, link, or data point shared. "
-                "Turn each into 'What is/How does/What was...?' format.\n"
-                "→ Category: 'WhatsApp: Information & Knowledge'\n\n"
-                "TYPE 5 — PROBLEMS & RESOLUTIONS\n"
-                "Find every issue, complaint, bug, confusion, or blocker raised — and how it was resolved. "
-                "If unresolved, note that.\n"
-                "→ Category: 'WhatsApp: Issues & Resolutions'\n\n"
-                "TYPE 6 — BUSINESS & PRODUCT INSIGHTS\n"
-                "Find anything about clients, products, features, pricing, timelines, deals, or strategy.\n"
-                "→ Category: 'WhatsApp: Business & Product Insights'\n\n"
-                "TYPE 7 — CONTEXT & BACKGROUND\n"
-                "Find any background context, history, or explanations given about the situation or topic.\n"
-                "→ Category: 'WhatsApp: Context & Background'\n\n"
-                "Return ONLY raw JSON array:\n"
-                '[\n  {"category":"WhatsApp: Information & Knowledge","question":"Q?","answer":"A. 💬 ..."},\n  ...\n]\n\n'
-                "Be exhaustive — extract every single piece of knowledge.\n\n"
-                "CHAT:\n" + content[:MAX_CTX]
-            )
-            try:
-                all_faqs.extend(_faq_call(client, prompt_b))
-            except Exception:
-                pass
-
-    if progress_cb: progress_cb(0.95, "✨ Deduplicating and finalising…")
-
-    # ── Deduplicate by question (case-insensitive) ────────────────
-    seen: set[str] = set()
-    deduped: list[dict] = []
-    for f in all_faqs:
-        key_q = f["question"].lower().strip()
-        if key_q and key_q not in seen:
-            seen.add(key_q)
-            deduped.append(f)
-
-    return deduped
-
-
-def generate_support_qas(progress_cb=None) -> list[dict]:
-    """Build a step-wise support quick-reference sheet from ALL knowledge sources."""
-    client = get_client()
-
-    # ── Collect all existing Q&As from every source ───────────────
-    all_existing: list[dict] = []
-    all_existing.extend(st.session_state.get("kb_faqs", []))
-    all_existing.extend(st.session_state.get("kb_rlqa_qas", []))
-    for qas in st.session_state.get("kb_client_qas", {}).values():
-        all_existing.extend(qas)
-
-    STEP_RULES = (
-        "Rules:\n"
-        "• For PROCESS / HOW-TO questions: use numbered steps in the answer.\n"
-        '  Format steps as: "1. Do X\\n2. Do Y\\n3. Do Z"\n'
-        "• For FACTUAL / WHAT-IS questions: 1–2 sentences, direct.\n"
-        "• For YES/NO questions: start Yes/No, then one sentence.\n"
-        "• Tone: support agent — confident, helpful, no filler.\n"
-        "• Preserve product names and proper nouns exactly.\n"
-        "• Return ONLY a raw JSON array (no markdown fences, no extra text):\n"
-        '[\n  {"category":"Cat","question":"Q?","answer":"Answer here."},\n  ...\n]\n'
-    )
-
-    result: list[dict] = []
-    errors: list[str] = []
-
-    if all_existing:
-        # ── Format in batches of 50 ───────────────────────────────
-        BATCH = 50
-        batches = [all_existing[i:i + BATCH] for i in range(0, len(all_existing), BATCH)]
-        total_b = len(batches)
-
-        for bi, batch in enumerate(batches):
-            pct = 0.05 + (bi / total_b) * 0.85
-            if progress_cb:
-                progress_cb(pct, f"✍️ Batch {bi+1}/{total_b} — formatting {len(batch)} Q&As…")
-
-            qa_block = json.dumps(
-                [{"category": q.get("category", "General"),
-                  "question":  q.get("question", ""),
-                  "answer":    q.get("answer", "")}
-                 for q in batch],
-                indent=2,
-            )
-            prompt = (
-                "You are a support agent editor building a quick-reference sheet.\n"
-                "Format every answer — use numbered steps for processes, short sentences for facts.\n\n"
-                + STEP_RULES
-                + "\nQ&As to format:\n" + qa_block
-            )
-            try:
-                result.extend(_faq_call(client, prompt))
-            except Exception as e:
-                errors.append(f"Batch {bi+1}: {e}")
-
-    else:
-        # ── No Q&As yet — generate from raw docs/links ────────────
-        ctx, _ = build_context()
-        if not ctx.strip():
-            raise ValueError("No knowledge base found. Add documents or links in Settings first.")
-        if progress_cb:
-            progress_cb(0.20, "🔍 Generating step-wise Q&As from knowledge base…")
-        prompt = (
-            "You are generating a support quick-reference sheet from a knowledge base.\n"
-            "Extract every important Q&A a support agent needs.\n\n"
-            + STEP_RULES
-            + "\nKNOWLEDGE BASE:\n" + ctx
-        )
-        try:
-            result.extend(_faq_call(client, prompt))
-        except Exception as e:
-            errors.append(str(e))
-
-    if errors and not result:
-        raise ValueError(f"Generation failed: {'; '.join(errors)}")
-
-    if progress_cb:
-        progress_cb(0.95, "✨ Finalising support sheet…")
-
-    seen: set[str] = set()
-    deduped: list[dict] = []
-    for f in result:
-        key = f["question"].lower().strip()
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(f)
-
-    return deduped
-
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO voice_calls (session_id, user_id, duration, status, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT DO NOTHING
+        """, (session_id, user_id, duration, status, datetime.now()))
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        st.error(f"Failed to save voice call: {e}")
+        return False
+    finally:
+        conn.close()
 
 # ══════════════════════════════════════════════════════════════════
-#  SHARED TOP NAV
+#  API FUNCTIONS
 # ══════════════════════════════════════════════════════════════════
-def render_topnav(show_settings_btn=True, show_back_btn=False, show_chat_btn=False, show_client_btn=False):  # noqa: ARG001 show_client_btn kept for compat
-    docs, links, wa, pages = kb_stats()
-    total = docs + links + wa + pages
-    status_label = f"{total} sources loaded" if total else "No knowledge base"
-
-    # HTML-only portion (purely visual)
-    logo_html = (
-        f'<img src="{_LOGO_URI}" class="topnav-logo" alt="Convin">'
-        if _LOGO_URI else
-        '<div class="dot">K</div>'
-    )
-    st.markdown(f"""
-    <div class="topnav">
-      <div class="topnav-brand">
-        {logo_html}
-        <span class="name">Convin Klaro</span>
-        <span class="badge">AI Support Intelligence</span>
-      </div>
-      <div class="topnav-right">
-        <span class="topnav-status">
-          <span class="live-dot"></span>
-          {status_label}
-        </span>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Streamlit buttons — functional nav row
-    nav_spacer = st.container()
-    with nav_spacer:
-        if show_chat_btn:
-            c_l, c_sheet, c_chat, c_set = st.columns([4.0, 1.4, 1.4, 1.4])
-        else:
-            c_l, c_faq, c_set = st.columns([5.5, 1.3, 1.3])
-        if show_back_btn:
-            with c_l:
-                if st.button("← Back to Answer Studio", key="back_btn", type="secondary"):
-                    st.session_state.page = "faq"
-                    st.rerun()
-        if show_settings_btn:
-            with c_faq:
-                if st.button("✦ Answer Studio", key="faq_nav_btn", type="secondary",
-                             use_container_width=True):
-                    st.session_state.page = "faq"
-                    st.rerun()
-            with c_set:
-                if st.button("⚙ Settings", key="settings_btn", type="secondary",
-                             use_container_width=True):
-                    st.session_state.page = "settings"
-                    st.rerun()
-        if show_chat_btn:
-            with c_sheet:
-                if st.button("📋 Support Sheet", key="sqna_nav_btn", type="secondary",
-                             use_container_width=True):
-                    st.session_state.page = "support_qna"
-                    st.rerun()
-            with c_chat:
-                if st.button("💬 Chat with AI", key="chat_topnav_btn", type="primary",
-                             use_container_width=True):
-                    st.session_state.chat_open = True
-                    st.rerun()
-            with c_set:
-                if st.button("⚙ Settings", key="settings_btn_faq", type="secondary",
-                             use_container_width=True):
-                    st.session_state.page = "settings"
-                    st.rerun()
-
-
-# ══════════════════════════════════════════════════════════════════
-#  CHAT PAGE
-# ══════════════════════════════════════════════════════════════════
-SUGGESTIONS = [
-    "🤖  What is Convin AI?",
-    "📊  How does call scoring work?",
-    "🔗  What integrations are supported?",
-    "⚡  How to set up Auto QA?",
-    "💬  Any recent discussions or decisions?",
-    "📤  How to export reports?",
-]
-
-def render_chat():
-    render_topnav(show_settings_btn=True, show_back_btn=False)
-
-    # ── Center column for chat
-    _, main, _ = st.columns([1, 5, 1])
-    with main:
-
-        # ── Message feed
-        if not st.session_state.chat_history:
-            # Welcome screen — live KB stats
-            docs, links, wa, pages = kb_stats()
-            total = docs + links + wa + pages
-            stat_chips = []
-            if docs:
-                stat_chips.append(f'<div class="kb-stat-chip active"><span class="num">{docs}</span><span>📄 Docs</span></div>')
-            if links + pages:
-                stat_chips.append(f'<div class="kb-stat-chip active"><span class="num">{links+pages}</span><span>🌐 Web pages</span></div>')
-            if wa:
-                stat_chips.append(f'<div class="kb-stat-chip active wa"><span class="num">{wa}</span><span>💬 WA chats</span></div>')
-
-            if stat_chips:
-                stats_html = '<div class="kb-stats-row">' + "".join(stat_chips) + '</div>'
-                ready_badge = '<div class="ready-badge">✦ Knowledge base ready</div>'
-            else:
-                stats_html = '<div class="no-kb-hint">No sources loaded yet — add documents in ⚙ Settings</div>'
-                ready_badge = ''
-
-            st.markdown(f"""
-            <div class="welcome-card">
-              <div class="welcome-icon">✦</div>
-              <div class="welcome-eyebrow">Convin Klaro</div>
-              <div class="welcome-title">Hi, I'm Animesh. <span>How may I help you?</span></div>
-              <div class="welcome-sub">
-                Ask me anything — I'll search across all your docs, web pages &amp; chats to find the answer.
-              </div>
-              {stats_html}
-              {ready_badge}
-            </div>
-            """, unsafe_allow_html=True)
-
-            # Suggestion chips — two rows of 3
-            row1, row2 = SUGGESTIONS[:3], SUGGESTIONS[3:]
-            scols1 = st.columns(3)
-            for i, (col, q) in enumerate(zip(scols1, row1)):
-                with col:
-                    if st.button(q, key=f"sugg_{i}", use_container_width=True):
-                        st.session_state.quick_q = q
-                        st.rerun()
-            scols2 = st.columns(3)
-            for i, (col, q) in enumerate(zip(scols2, row2)):
-                with col:
-                    if st.button(q, key=f"sugg_{i+3}", use_container_width=True):
-                        st.session_state.quick_q = q
-                        st.rerun()
-        else:
-            # Render history
-            for msg in st.session_state.chat_history:
-                ts = msg.get("ts", "")
-                content = msg["content"]
-
-                if msg["role"] == "user":
-                    safe = content.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\n","<br>")
-                    st.markdown(
-                        f'<div class="msg-group">'
-                        f'<div class="msg-user-row">'
-                        f'<div class="msg-user-bubble">{safe}</div>'
-                        f'</div>'
-                        f'<div class="msg-ts">{ts}</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    # Render assistant message via st.markdown for proper formatting
-                    st.markdown(
-                        '<div class="msg-group"><div class="msg-ai-row">'
-                        '<div class="msg-ai-avatar">AI</div>'
-                        '<div style="flex:1;max-width:72%">',
-                        unsafe_allow_html=True,
-                    )
-                    st.markdown(
-                        f'<div class="msg-ai-bubble">{content}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    # Sources (only if toggle is ON)
-                    if st.session_state.get("show_sources") and msg.get("sources"):
-                        tags = " ".join(
-                            f'<span class="source-tag">{s[:30]}</span>'
-                            for s in msg["sources"][:5]
-                        )
-                        st.markdown(
-                            f'<div class="sources-bar">{tags}</div>',
-                            unsafe_allow_html=True,
-                        )
-                    st.markdown(
-                        f'<div class="msg-ts msg-ts-left">{ts}</div>'
-                        '</div></div></div>',
-                        unsafe_allow_html=True,
-                    )
-
-        # Scroll anchor
-        st.markdown("<div id='chat-end'></div>", unsafe_allow_html=True)
-        # Streaming response renders here while generating
-        stream_ph = st.empty()
-        st.markdown("<div style='height:130px'></div>", unsafe_allow_html=True)
-
-    # ── Fixed input bar
-    st.markdown('<div class="input-bar-wrap"><div class="input-bar-inner">', unsafe_allow_html=True)
-    input_l, input_r = st.columns([9, 1])
-    with input_l:
-        user_input = st.text_input(
-            "query", placeholder="Ask a question…",
-            label_visibility="collapsed", key="chat_input",
-            value=st.session_state.quick_q,
-        )
-    with input_r:
-        send = st.button("Send", type="primary", use_container_width=True)
-    st.markdown('</div></div>', unsafe_allow_html=True)
-
-    # Clear quick_q after it was used
-    if st.session_state.quick_q:
-        st.session_state.quick_q = ""
-
-    # ── Handle message send
-    active = user_input.strip()
-    if (send or (active and st.session_state._last_input != active)) and active:
-        st.session_state._last_input = active
-        ts_now = datetime.now().strftime("%H:%M")
-        st.session_state.chat_history.append(
-            {"role": "user", "content": active, "ts": ts_now}
-        )
-        answer, sources = ask_claude_stream(active, stream_ph)
-        st.session_state.chat_history.append(
-            {"role": "assistant", "content": answer, "ts": ts_now, "sources": sources}
-        )
-        st.rerun()
-
-
-# ══════════════════════════════════════════════════════════════════
-#  SETTINGS PAGE
-# ══════════════════════════════════════════════════════════════════
-def ts_label(iso):
-    try: return datetime.fromisoformat(iso).strftime("%d %b %H:%M")
-    except: return ""
-
-def _merge_similar_categories(faqs: list[dict], min_count: int = 5) -> list[dict]:
-    """Use Claude to merge similar category names, then keep only cats with >= min_count Q&As."""
-    if not faqs:
-        return faqs
-
-    cat_counts: dict[str, int] = {}
-    for f in faqs:
-        c = f.get("category", "Other")
-        cat_counts[c] = cat_counts.get(c, 0) + 1
-
-    cats_str = "\n".join(f"  {count:4d}  {cat}" for cat, count in sorted(cat_counts.items()))
-
-    prompt = (
-        "You are cleaning up a Q&A knowledge base category list for Convin Sense (AI voice bot).\n\n"
-        "TASK: Merge similar or duplicate categories into canonical names.\n\n"
-        "RULES:\n"
-        "• Merge categories that are semantically identical, near-duplicate, or sub-topics of the same theme.\n"
-        "• Use short, clear canonical names (2–5 words, Title Case).\n"
-        "• Keep categories that are genuinely distinct topics separate.\n"
-        "• Map EVERY listed category — even if it stays the same.\n\n"
-        f"CATEGORIES (count  name):\n{cats_str}\n\n"
-        "Return ONLY a raw JSON object — no markdown, no explanation:\n"
-        '{"Original Category Name": "Canonical Category Name", ...}'
-    )
-
-    mapping: dict[str, str] = {}
+def get_chat_response(user_message: str) -> str:
+    """Get response from Claude via Anthropic API"""
     try:
-        r = get_client().messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
-        raw = re.sub(r"\n?```$", "", raw)
-        mapping = json.loads(raw)
-    except Exception:
-        pass
+        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            return "API key not configured"
 
-    # Apply mapping
-    updated = []
-    for f in faqs:
-        nf = dict(f)
-        nf["category"] = mapping.get(f.get("category", "Other"), f.get("category", "Other"))
-        updated.append(nf)
+        client = anthropic.Anthropic(api_key=api_key)
 
-    # Count after merge
-    new_counts: dict[str, int] = {}
-    for f in updated:
-        c = f.get("category", "Other")
-        new_counts[c] = new_counts.get(c, 0) + 1
-
-    # Keep only categories with >= min_count; move small ones to "General"
-    final = []
-    for f in updated:
-        if new_counts.get(f.get("category", "Other"), 0) >= min_count:
-            final.append(f)
-        else:
-            nf = dict(f)
-            nf["category"] = "General"
-            final.append(nf)
-
-    # Drop "General" if it's also too small
-    gen_count = sum(1 for f in final if f.get("category") == "General")
-    if gen_count < min_count:
-        final = [f for f in final if f.get("category") != "General"]
-
-    return final
-
-
-def render_settings():
-    render_topnav(show_settings_btn=False, show_back_btn=True)
-
-    docs, links, wa, pages = kb_stats()
-
-    # Page header
-    st.markdown("""
-    <div class="settings-page">
-    <div class="settings-inner">
-    """, unsafe_allow_html=True)
-
-    # Back link + title row
-    st.markdown("""
-    <div class="settings-title">Knowledge Base Settings</div>
-    <div class="settings-sub">
-        Manage the documents and data sources that power the AI assistant.
-        None of these sources are visible to end users.
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Stats row ──────────────────────────────────────────────────
-    rlqa_n = len(st.session_state.get("kb_rlqa_files", []))
-    s1, s2, s3, s3b, s4, s5 = st.columns(6)
-    s1.metric("Documents", docs)
-    s2.metric("Web pages", links)
-    s3.metric("WA chats",  wa)
-    s3b.metric("Real Life", rlqa_n)
-    s4.metric("Crawled",   pages)
-    s5.metric("Total",     docs + links + wa + rlqa_n + pages)
-
-    st.markdown("---")
-
-    # ── Tabs ────────────────────────────────────────────────────────
-    t1, t2, t3, t3b, t4, t5, t6 = st.tabs([
-        "📄 Documents", "🌐 Web Links", "📚 Client Use Cases", "📂 Real Life Q&A",
-        "🕷️ Crawl Site", "⚙️ Preferences", "🎯 Client Engine",
-    ])
-
-    # ── Documents ──────────────────────────────────────────────────
-    with t1:
-        st.caption("Supported: PDF · DOCX · XLSX · PPTX · HTML · TXT · CSV · JSON · RTF · EPUB · EML · Jupyter (.ipynb) · code files · and more.")
-        ups = st.file_uploader(
-            "upload_docs", accept_multiple_files=True,
-            key="doc_uploader", label_visibility="collapsed",
-        )
-        if ups:
-            ex = {d["name"] for d in st.session_state.kb_documents}
-            added = 0
-            for f in ups:
-                if f.name not in ex:
-                    with st.spinner(f"Parsing {f.name}…"):
-                        content = parse_file(f)
-                    st.session_state.kb_documents.append({
-                        "name": f.name,
-                        "content": content,
-                        "type": _ext(f.name),
-                        "added_at": datetime.now().isoformat(),
-                        "size": len(content),
-                    })
-                    added += 1
-            if added:
-                save_kb()
-                st.success(f"✅ {added} file(s) added and saved.")
-
-        if st.session_state.kb_documents:
-            st.markdown("**Loaded documents**")
-            for i, d in enumerate(st.session_state.kb_documents):
-                ca, cb = st.columns([6, 1])
-                with ca:
-                    st.markdown(
-                        f'<div class="file-row">'
-                        f'<span class="file-row-icon">{FILE_ICON(d["type"])}</span>'
-                        f'<span class="file-row-name">{d["name"]}</span>'
-                        f'<span class="file-row-meta">{d["size"]:,} chars · {ts_label(d["added_at"])}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                with cb:
-                    if st.button("Remove", key=f"rm_doc_{i}", type="secondary"):
-                        st.session_state.kb_documents.pop(i)
-                        save_kb(); st.rerun()
-
-    # ── Web Links ──────────────────────────────────────────────────
-    with t2:
-        st.caption("Paste a URL to scrape and index that page's content.")
-        url_in = st.text_input("URL", placeholder="https://convin.ai/features", key="link_url")
-        if st.button("Add page", key="add_link", type="primary"):
-            u = url_in.strip()
-            if u:
-                if u in {l["url"] for l in st.session_state.kb_links}:
-                    st.warning("This URL is already in the knowledge base.")
-                else:
-                    with st.spinner("Fetching page…"):
-                        title, content = fetch_url(u)
-                    st.session_state.kb_links.append({
-                        "url": u, "title": title, "content": content,
-                        "added_at": datetime.now().isoformat(), "size": len(content),
-                    })
-                    save_kb()
-                    st.success(f"Added: {title[:50]}")
-            else:
-                st.error("Enter a URL first.")
-
-        if st.session_state.kb_links:
-            st.markdown("**Loaded links**")
-            for i, l in enumerate(st.session_state.kb_links):
-                ca, cb = st.columns([6, 1])
-                with ca:
-                    st.markdown(
-                        f'<div class="file-row">'
-                        f'<span class="file-row-icon">🌐</span>'
-                        f'<span class="file-row-name">{l["title"][:50]}</span>'
-                        f'<span class="file-row-meta">{l["size"]:,} chars · {ts_label(l["added_at"])}</span>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                with cb:
-                    if st.button("Remove", key=f"rm_link_{i}", type="secondary"):
-                        st.session_state.kb_links.pop(i)
-                        save_kb(); st.rerun()
-
-    # ── WhatsApp ───────────────────────────────────────────────────
-    with t3:
-        st.markdown("""
-        <div style='background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.20);
-        border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:0.82rem;color:#6EE7B7'>
-        📱 <b>How to export:</b> Open WhatsApp → Chat → ⋮ / ⋯ → More → Export Chat → share the <code>.txt</code> or <code>.zip</code> file here.
-        </div>
-        """, unsafe_allow_html=True)
-
-        wa_up = st.file_uploader(
-            "wa_upload", accept_multiple_files=True,
-            type=["txt", "zip", "pdf", "docx", "doc", "xlsx", "xls", "csv", "pptx", "ppt", "png", "jpg", "jpeg", "webp", "gif", "mp4", "mp3", "ogg", "opus", "aac", "wav", "json", "html", "htm"],
-            key="wa_uploader", label_visibility="collapsed",
-        )
-        if wa_up:
-            ex = {w["name"] for w in st.session_state.kb_whatsapp}
-            added, skipped = 0, []
-            for f in wa_up:
-                if f.name in ex:
-                    continue
-
-                # Extract text from zip (WhatsApp export with media)
-                if f.name.lower().endswith(".zip"):
-                    try:
-                        with zipfile.ZipFile(io.BytesIO(f.read())) as zf:
-                            txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
-                            if not txt_files:
-                                skipped.append(f.name)
-                                continue
-                            raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
-                            display_name = f.name
-                    except Exception:
-                        skipped.append(f.name)
-                        continue
-                elif f.name.lower().endswith(".txt"):
-                    raw = f.read().decode("utf-8", "ignore")
-                    display_name = f.name
-                else:
-                    # Non-text files: store as attachment reference
-                    b64 = base64.b64encode(f.read()).decode()
-                    st.session_state.kb_whatsapp.append({
-                        "name": f.name, "content": f"[Attached file: {f.name}]",
-                        "added_at": datetime.now().isoformat(),
-                        "size": f.size,
-                        "meta": {"valid": True, "total": 0, "participants": [], "date_range": "", "is_attachment": True},
-                        "attachment_data": b64,
-                        "attachment_mime": f.type or "application/octet-stream",
-                    })
-                    added += 1
-                    continue
-
-                parsed = parse_wa(raw)
-                meta   = parse_wa_meta(parsed)
-
-                # Validate it's a real WhatsApp export
-                if not meta["valid"] or meta["total"] < 3:
-                    skipped.append(f.name)
-                    continue
-
-                st.session_state.kb_whatsapp.append({
-                    "name": display_name, "content": parsed,
-                    "added_at": datetime.now().isoformat(),
-                    "size": len(parsed),
-                    "meta": meta,
-                })
-                added += 1
-
-            if added:
-                save_kb()
-                st.success(f"✅ {added} file(s) added.")
-            if skipped:
-                st.warning(f"⚠️ {', '.join(skipped)} — doesn't look like a WhatsApp export (no messages found).")
-
-        if st.session_state.kb_whatsapp:
-            st.markdown("**Loaded chats**")
-            for i, w in enumerate(st.session_state.kb_whatsapp):
-                meta = w.get("meta") or parse_wa_meta(w.get("content", ""))
-                plist = ", ".join(meta.get("participants", [])[:4]) if meta.get("valid") else "—"
-                if len(meta.get("participants", [])) > 4:
-                    plist += f" +{len(meta['participants'])-4} more"
-                drange = meta.get("date_range", "")
-                total_m = meta.get("total", 0)
-
-                ca, cb = st.columns([6, 1])
-                with ca:
-                    st.markdown(
-                        f'<div class="file-row" style="flex-direction:column;align-items:flex-start;gap:6px;padding:12px 16px">'
-                        f'<div style="display:flex;align-items:center;gap:8px;width:100%">'
-                        f'<span class="file-row-icon">💬</span>'
-                        f'<span class="file-row-name">{w["name"]}</span>'
-                        f'<span class="file-row-meta">{w["size"]:,} chars · {ts_label(w["added_at"])}</span>'
-                        f'</div>'
-                        f'<div style="display:flex;gap:10px;flex-wrap:wrap;padding-left:24px">'
-                        f'<span style="font-size:0.7rem;color:#10B981">👥 {plist}</span>'
-                        f'<span style="font-size:0.7rem;color:#8D90AA">📅 {drange}</span>'
-                        f'<span style="font-size:0.7rem;color:#8D90AA">💬 {total_m:,} messages</span>'
-                        f'</div>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                with cb:
-                    if st.button("Remove", key=f"rm_wa_{i}", type="secondary"):
-                        st.session_state.kb_whatsapp.pop(i)
-                        save_kb(); st.rerun()
-
-                content = w.get("content", "")
-                if content and not w.get("meta", {}).get("is_attachment"):
-                    with st.expander(f"📖 View messages — {w['name']}", expanded=False):
-                        msg_lines = [ln for ln in content.split("\n") if ln.strip()]
-                        show_last = 300
-                        if len(msg_lines) > show_last:
-                            st.caption(f"Showing last {show_last} of {len(msg_lines):,} messages")
-                            msg_lines = msg_lines[-show_last:]
-                        st.markdown(
-                            '<div style="height:420px;overflow-y:auto;font-family:monospace;'
-                            'font-size:0.73rem;line-height:1.6;background:#0d1117;color:#c9d1d9;'
-                            'padding:12px 16px;border-radius:8px;white-space:pre-wrap;">'
-                            + "\n".join(msg_lines).replace("<", "&lt;").replace(">", "&gt;")
-                            + "</div>",
-                            unsafe_allow_html=True,
-                        )
-
-        # ── Generate generic Q&As ─────────────────────────────────
-        st.markdown("---")
-        cl_qas_existing = [f for f in st.session_state.get("kb_faqs", [])
-                           if f.get("category", "").startswith("Client Learnings:")]
-        cg1, cg2 = st.columns([2, 3])
-        with cg1:
-            wa_gen_btn = st.button(
-                "🤖 Generate Generic Q&As", key="wa_gen_qas_btn",
-                type="primary", use_container_width=True,
-                disabled=not st.session_state.get("kb_whatsapp"),
-            )
-        with cg2:
-            st.markdown(
-                f"<div style='padding-top:8px;font-size:.78rem;color:#6B7280'>"
-                f"Extracts maximum generic Q&As — patterns across all clients, no client names. "
-                f"Currently <b style='color:#A78BFA'>{len(cl_qas_existing)}</b> saved.</div>",
-                unsafe_allow_html=True,
-            )
-
-        if wa_gen_btn:
-            wa_prog = st.progress(0.0, "Starting…")
-            new_qas = _generate_wa_generic_qas(lambda p, m: wa_prog.progress(p, m))
-            if new_qas:
-                other_faqs = [f for f in st.session_state.get("kb_faqs", [])
-                              if not f.get("category", "").startswith("Client Learnings:")]
-                st.session_state.kb_faqs = other_faqs + new_qas
-                save_kb()
-                wa_prog.progress(1.0, f"✅ Done")
-                st.success(f"✅ Generated **{len(new_qas)}** generic Q&As from client use cases.")
-                st.rerun()
-            else:
-                wa_prog.empty()
-                st.warning("Nothing extracted — upload chat files above first.")
-
-    # ── Real Life Q&A ──────────────────────────────────────────────
-    with t3b:
-        _render_rlqa_settings()
-
-    # ── Crawl Site ─────────────────────────────────────────────────
-    with t4:
-        st.caption("Automatically crawl all pages on a website and add them to the knowledge base.")
-        crawl_url = st.text_input("Root URL", value="https://convin.ai", key="crawl_url")
-        max_p     = st.slider("Max pages", 5, 100, 30, 5)
-        col_go, col_clr = st.columns([2, 1])
-        go  = col_go.button("Start crawl", type="primary", use_container_width=True)
-        clr = col_clr.button("Clear all crawled", type="secondary", use_container_width=True)
-
-        if clr:
-            st.session_state.kb_crawled = []; save_kb(); st.rerun()
-
-        s_ph = st.empty(); p_ph = st.empty()
-        if go:
-            u = crawl_url.strip()
-            if u:
-                s_ph.info(f"Crawling **{u}** …")
-                n = crawl_site(u, max_p, s_ph, p_ph)
-                save_kb()
-                s_ph.success(f"✅ Done — {n} pages indexed.")
-                st.rerun()
-            else:
-                st.error("Enter a URL.")
-
-        if st.session_state.kb_crawled:
-            with st.expander(f"📑 {len(st.session_state.kb_crawled)} crawled pages", expanded=False):
-                for i, pg in enumerate(st.session_state.kb_crawled):
-                    ca, cb = st.columns([6, 1])
-                    with ca:
-                        st.markdown(
-                            f'<div class="file-row">'
-                            f'<span class="file-row-icon">🕷️</span>'
-                            f'<span class="file-row-name">{pg["title"][:55]}</span>'
-                            f'<span class="file-row-meta">{pg["size"]:,} chars</span>'
-                            f'</div>',
-                            unsafe_allow_html=True,
-                        )
-                    with cb:
-                        if st.button("Remove", key=f"rm_pg_{i}", type="secondary"):
-                            st.session_state.kb_crawled.pop(i)
-                            save_kb(); st.rerun()
-
-    # ── Preferences ────────────────────────────────────────────────
-    with t5:
-        st.markdown("**Display settings**")
-        show_src = st.toggle(
-            "Show sources under AI answers",
-            value=st.session_state.get("show_sources", False),
-            help="When enabled, the document/page names used to generate each answer are shown below the response.",
-        )
-        if show_src != st.session_state.get("show_sources", False):
-            st.session_state["show_sources"] = show_src
-            save_kb()
-
-        st.markdown("---")
-        st.markdown("**Export knowledge base**")
-        _exp_faqs = st.session_state.get("kb_faqs", [])
-        if _exp_faqs:
-            _exp_cats = sorted(set(f["category"] for f in _exp_faqs))
-            ex1, ex2 = st.columns(2)
-            with ex1:
-                st.download_button(
-                    "⬇️ Export JSON",
-                    data=json.dumps(_exp_faqs, indent=2, ensure_ascii=False),
-                    file_name="answer-studio.json", mime="application/json",
-                    use_container_width=True,
-                )
-            with ex2:
-                _lines = []
-                for _cat in _exp_cats:
-                    _lines += [f"\n{'='*50}", f"  {_cat.upper()}", f"{'='*50}\n"]
-                    for _idx, _faq in enumerate([f for f in _exp_faqs if f["category"] == _cat], 1):
-                        _lines += [f"Q{_idx}. {_faq['question']}", f"A:  {_faq['answer']}\n"]
-                st.download_button(
-                    "⬇️ Export TXT",
-                    data="\n".join(_lines), file_name="answer-studio.txt", mime="text/plain",
-                    use_container_width=True,
-                )
-        else:
-            st.caption("Generate answers first to enable exports.")
-
-        st.markdown("---")
-        st.markdown("**Q&A Category Cleanup**")
-        st.caption("Merge similar categories and drop any with fewer than 5 Q&As.")
-        _generic_preview = [f for f in st.session_state.get("kb_faqs", [])
-                            if not f.get("category", "").startswith("WhatsApp:")
-                            and not f.get("category", "").startswith("Client Learnings:")]
-        _cat_counts: dict[str, int] = {}
-        for _f in _generic_preview:
-            _c = _f.get("category", "Other")
-            _cat_counts[_c] = _cat_counts.get(_c, 0) + 1
-        st.caption(f"Current: {len(_cat_counts)} categories across {len(_generic_preview)} Q&As")
-
-        if st.button("🧹 Merge & Clean Categories", key="merge_cats_btn",
-                     type="primary", disabled=not _generic_preview):
-            with st.spinner("Analysing categories with Claude…"):
-                _merged = _merge_similar_categories(_generic_preview, min_count=5)
-            _other_faqs = [f for f in st.session_state.get("kb_faqs", [])
-                           if f.get("category", "").startswith("WhatsApp:")
-                           or f.get("category", "").startswith("Client Learnings:")]
-            st.session_state.kb_faqs = _other_faqs + _merged
-            save_kb()
-            _new_counts: dict[str, int] = {}
-            for _f in _merged:
-                _c = _f.get("category", "Other")
-                _new_counts[_c] = _new_counts.get(_c, 0) + 1
-            st.success(f"✅ Done — {len(_new_counts)} categories, {len(_merged)} Q&As kept.")
-            st.rerun()
-
-        st.markdown("---")
-        st.markdown("**Danger zone**")
-        if st.button("🗑️  Clear entire knowledge base", type="secondary"):
-            for k in KB_KEYS:
-                st.session_state[k] = []
-            save_kb()
-            st.success("Knowledge base cleared.")
-            st.rerun()
-
-    # ── Client Engine ──────────────────────────────────────────────
-    with t6:
-        _render_client_engine_settings()
-
-    st.markdown("</div></div>", unsafe_allow_html=True)
-
-
-# ══════════════════════════════════════════════════════════════════
-#  FAQ PAGE  —  3-tab layout
-#  Tab 1: FAQ       — curated Convin Sense product Q&As only
-#  Tab 2: Q&A       — all generic Q&As (docs + web, no WhatsApp)
-#  Tab 3: WhatsApp  — WhatsApp-extracted Q&As only
-# ══════════════════════════════════════════════════════════════════
-
-# Categories that are specifically about the Convin Sense product.
-# Only these appear in the curated FAQ tab.
-_CONVIN_FAQ_CATS = {
-    # Core platform
-    "Convin Platform",
-    "AI Phone Calls",
-    "AI Phone Call Agent",
-    "Real-Time Assist Agent",
-    "Conversation Intelligence",
-    "Auto QA",
-    "Convin Insights",
-    "Convin LMS",
-    # Product descriptions
-    "Core Capabilities",
-    "Core Features",
-    "Product Overview",
-    "Platform Overview",
-    "How It Works",
-    "Key Value Propositions",
-    "Getting Started",
-    # Business & trust
-    "Integrations",
-    "Data Security",
-    "Human-in-the-Loop",
-    "Business Value",
-    "Target Audience",
-    "Platform Positioning",
-    "Use Cases",
-    "Trust & Reputation",
-    "Call Quality & QA",
-    "Definitions & Concepts",
-    "Company & Background",
-    "Pricing & Plans",
-    # Use cases
-    "Sales Use Case",
-    "Collections Use Case",
-    "Compliance Use Case",
-    "Lead Qualification",
-    "Customer Retention",
-}
-# Max Q&As shown per category in the FAQ tab to keep it concise
-_FAQ_CAP_PER_CAT = 5
-
-_CAT_ICONS = {
-    # WhatsApp pilot categories
-    "WhatsApp: Pilot Clients & Metrics":        "📊",
-    "WhatsApp: Product Issues & Bugs":          "🐛",
-    "WhatsApp: Setup & Configuration":          "⚙️",
-    "WhatsApp: Onboarding Learnings":           "🚀",
-    "WhatsApp: Client Objections & Responses":  "💬",
-    "WhatsApp: Feature Requests":               "✨",
-    "WhatsApp: Bot Performance":                "🤖",
-    "WhatsApp: Sales Process":                  "💼",
-    # Product / FAQ categories
-    "AI Phone Call Platform":           "📞",
-    "Conversation Intelligence":        "🧠",
-    "Real-Time Assist":                 "⚡",
-    "Auto QA":                          "✅",
-    "Convin Insights":                  "📈",
-    "Pricing & Plans":                  "💰",
-    "Integrations":                     "🔗",
-    "Company & Background":             "🏢",
-    "Sales Use Case":                   "💼",
-    "Coaching":                         "🎯",
-    "LMS":                              "📚",
-    "Healthcare":                       "🏥",
-    "Banking & Finance":                "🏦",
-    "Compliance":                       "🛡️",
-    "Customer Retention":               "🤝",
-    "Lead Qualification":               "🎯",
-    "Collections":                      "💳",
-    "BPO":                              "🏭",
-    "Insurance":                        "📋",
-    "Home Services":                    "🏠",
-    # Generic
-    "Business Outcomes & ROI":          "📊",
-    "Core Capabilities":                "⚙️",
-    "How It Works":                     "🔍",
-    "After Hours Answering Service":    "🌙",
-    "Answering Service Pricing Models": "💰",
-    "AI Call Answering Service":        "🤖",
-    "Customer Satisfaction Score":      "⭐",
-    "Call Queue Management":            "📋",
-    "Bot Performance":                  "🤖",
-    "Feature Requests":                 "✨",
-    "Setup & Configuration":            "⚙️",
-    "Onboarding Learnings":             "🚀",
-    "Sales Process":                    "💼",
-}
-
-def _render_category_dashboard(subset: list[dict], tab_key: str, no_content_msg: str = "No Q&As yet."):
-    """Category cards + per-category expandable Q&A list."""
-    if not subset:
-        st.markdown(f"""
-        <div class="no-faq">
-          <div class="no-faq-icon">✦</div>
-          <h3>{no_content_msg}</h3>
-          <p>Generate answers first using the button above.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        return
-
-    cat_counts = {}
-    for f in subset:
-        cat_counts[f["category"]] = cat_counts.get(f["category"], 0) + 1
-
-    # ── Stat cards row ────────────────────────────────────────────
-    cards_html = ""
-    for cat, count in sorted(cat_counts.items(), key=lambda x: -x[1]):
-        icon = _CAT_ICONS.get(cat, "📌")
-        label = cat.replace("WhatsApp: ", "")
-        cards_html += (
-            f'<div style="background:#1a1d2e;border:1px solid #2d3158;border-radius:10px;'
-            f'padding:14px 16px;min-width:150px;flex:1;max-width:220px">'
-            f'<div style="font-size:1.3rem">{icon}</div>'
-            f'<div style="font-size:1.5rem;font-weight:700;color:#A78BFA;margin:4px 0">{count}</div>'
-            f'<div style="font-size:0.72rem;color:#9CA3AF;line-height:1.4">{label}</div>'
-            f'</div>'
-        )
-    st.markdown(
-        f'<div style="display:flex;flex-wrap:wrap;gap:10px;margin:16px 0 24px">{cards_html}</div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── Per-category expanders ────────────────────────────────────
-    for ci, (cat, count) in enumerate(sorted(cat_counts.items(), key=lambda x: -x[1])):
-        icon = _CAT_ICONS.get(cat, "📌")
-        label = cat.replace("WhatsApp: ", "")
-        bucket = [f for f in subset if f["category"] == cat]
-        with st.expander(f"{icon}  {label}  ·  {count} Q&As" + "\u200b" * ci, expanded=False):
-            _render_faq_list(bucket, f"{tab_key}_{ci}", f"search_{tab_key}_{ci}")
-
-def _render_faq_list(subset: list[dict], tab_key: str, search_key: str):
-    """Reusable search + category expanders for a subset of FAQs."""
-    if not subset:
-        st.markdown("""
-        <div class="no-faq">
-          <div class="no-faq-icon">✦</div>
-          <h3>Nothing here yet</h3>
-          <p>Generate answers first using the button above.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        return
-
-    cats = list(dict.fromkeys(f["category"] for f in subset))
-
-    sc, qc = st.columns([6, 1])
-    with sc:
-        search = st.text_input(
-            "search", placeholder="🔍  Search questions and answers…",
-            label_visibility="collapsed", key=search_key,
-        )
-    with qc:
-        st.markdown(
-            f"<div style='text-align:right;padding-top:8px;"
-            f"font-size:0.78rem;color:#8D90AA'>"
-            f"<b style='color:#A78BFA'>{len(subset)}</b> Q&As</div>",
-            unsafe_allow_html=True,
-        )
-    slc = search.lower().strip() if search else ""
-
-    for cat in cats:
-        cat_faqs = [f for f in subset if f["category"] == cat]
-        if slc:
-            cat_faqs = [
-                f for f in cat_faqs
-                if slc in f["question"].lower() or slc in f["answer"].lower()
+        response = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=500,
+            messages=[
+                {"role": "user", "content": user_message}
             ]
-        if not cat_faqs:
-            continue
-
-        st.markdown(
-            f'<div class="cat-label">📂 {cat} &nbsp;·&nbsp; {len(cat_faqs)} questions</div>',
-            unsafe_allow_html=True,
         )
 
-        for idx, faq in enumerate(cat_faqs):
-            q_disp = faq.get("question", "")
-            a_disp = faq.get("answer", "")
-            if not q_disp or not a_disp:
-                continue
+        return response.content[0].text
+    except Exception as e:
+        return f"Error: {str(e)}"
 
-            has_wa = "💬 Chatted by" in a_disp or "chatted by" in a_disp.lower()
-            badge_html = (
-                '<span class="faq-wa-badge">💬 WhatsApp source</span>'
-                if has_wa else
-                '<span class="faq-doc-badge">📄 KB source</span>'
-            )
-
-            if slc:
-                def hl(text, term=slc):
-                    return re.sub(
-                        f"({re.escape(term)})",
-                        r'<mark style="background:rgba(124,58,237,0.28);'
-                        r'border-radius:3px;padding:0 3px;color:#EEF0FA">\1</mark>',
-                        text, flags=re.IGNORECASE,
-                    )
-                a_disp = hl(a_disp)
-                q_disp = hl(q_disp)
-
-            a_rendered = re.sub(
-                r"(💬 Chatted by[^\n]+)",
-                r'<div class="wa-cite">🟢 \1</div>',
-                a_disp,
-            )
-
-            with st.expander(f"Q: {faq['question']}" + "\u200b" * idx, expanded=False):
-                st.markdown(
-                    f"<div class='faq-answer-wrap'>"
-                    f"<div style='margin-bottom:10px'>{badge_html}</div>"
-                    f"<div class='faq-answer-label'>Answer</div>"
-                    f"<div class='faq-answer-body'>{a_rendered}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                if st.button(
-                    "💬 Ask follow-up in chat",
-                    key=f"faq_ask_{tab_key}_{cat}_{idx}",
-                    type="secondary",
-                ):
-                    st.session_state.quick_q  = faq["question"]
-                    st.session_state.chat_open = True
-                    st.rerun()
-
-
-_FLOWCHART_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-  :root {
-    --bg:     #060914;
-    --s1:     #0D1117;
-    --s2:     #111827;
-    --s3:     #1A2035;
-    --accent: #6366F1;
-    --aclt:   #818CF8;
-    --cyan:   #22D3EE;
-    --green:  #10B981;
-    --amber:  #F59E0B;
-    --rose:   #F43F5E;
-    --t1:     #E5E7EB;
-    --t2:     #94A3B8;
-    --t3:     #475569;
-    --bdr:    rgba(255,255,255,0.06);
-    --bdra:   rgba(99,102,241,0.28);
-  }
-  * { box-sizing:border-box; margin:0; padding:0; }
-  html, body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--t1);
-    -webkit-font-smoothing: antialiased;
-    min-height: 100%;
-  }
-  body {
-    background-image:
-      radial-gradient(ellipse 110% 55% at 50% -10%, rgba(139,92,246,0.18) 0%, transparent 55%),
-      radial-gradient(ellipse 70% 45% at 95% 90%, rgba(236,72,153,0.10) 0%, transparent 50%),
-      radial-gradient(ellipse 60% 40% at 5% 75%, rgba(34,211,238,0.08) 0%, transparent 50%);
-    padding: 32px 24px 48px;
-  }
-
-  /* ── Header ── */
-  .hd {
-    text-align: center;
-    margin-bottom: 32px;
-  }
-  .hd .eyebrow {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(99,102,241,0.12);
-    border: 1px solid rgba(99,102,241,0.25);
-    border-radius: 100px;
-    padding: 5px 16px;
-    font-size: 11px; font-weight: 700; letter-spacing: 2px;
-    text-transform: uppercase; color: var(--aclt);
-    margin-bottom: 14px;
-  }
-  .hd h1 {
-    font-size: 1.85rem; font-weight: 800; color: var(--t1);
-    line-height: 1.15;
-    background: linear-gradient(135deg, #E5E7EB 30%, #818CF8 70%, #22D3EE 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .hd p {
-    margin-top: 10px; color: var(--t2); font-size: 14px;
-    max-width: 560px; margin-inline: auto; line-height: 1.6;
-  }
-
-  /* ── Diagram card ── */
-  .diagram-card {
-    background: var(--s2);
-    border: 1px solid var(--bdra);
-    border-radius: 20px;
-    padding: 32px 28px;
-    max-width: 1080px;
-    margin: 0 auto;
-    box-shadow:
-      0 0 0 1px rgba(99,102,241,0.08),
-      0 8px 40px rgba(0,0,0,0.5),
-      0 0 80px rgba(99,102,241,0.06) inset;
-    overflow-x: auto;
-  }
-  .mermaid { min-width: 720px; }
-
-  /* ── Legend ── */
-  .legend {
-    display: flex; flex-wrap: wrap; gap: 10px;
-    justify-content: center;
-    max-width: 860px; margin: 24px auto 0;
-  }
-  .legend-item {
-    display: flex; align-items: center; gap: 8px;
-    background: rgba(17,24,39,0.85);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 8px; padding: 7px 14px;
-    font-size: 12px; color: var(--t2);
-    backdrop-filter: blur(8px);
-  }
-  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-
-  /* ── Metric cards ── */
-  .metrics {
-    display: flex; flex-wrap: wrap; gap: 12px;
-    justify-content: center;
-    max-width: 860px; margin: 28px auto 0;
-  }
-  .mc {
-    background: rgba(17,24,39,0.9);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 14px; padding: 18px 22px;
-    text-align: center; flex: 1; min-width: 120px;
-    transition: border-color .2s, transform .2s;
-  }
-  .mc:hover { border-color: var(--bdra); transform: translateY(-2px); }
-  .mc .val { font-size: 1.45rem; font-weight: 800; color: var(--aclt); }
-  .mc .lbl { font-size: 11px; color: var(--t3); margin-top: 5px; line-height: 1.4; }
-
-  /* ── Footer ── */
-  .ft {
-    text-align: center; margin-top: 36px;
-    font-size: 11px; color: var(--t3); letter-spacing: .3px;
-  }
-  .ft span { color: var(--t2); }
-</style>
-</head>
-<body>
-
-<div class="hd">
-  <div class="eyebrow">✦ Convin Sense &nbsp;·&nbsp; AI Voice Bot</div>
-  <h1>End-to-End Process Flow</h1>
-  <p>From lead ingestion through qualification, handoff, and conversion tracking — all decision points, channels, and NBA loops.</p>
-</div>
-
-<div class="diagram-card">
-<div class="mermaid">
-%%{init: {"theme": "base", "themeVariables": {
-  "primaryColor":"#1A2035",
-  "primaryTextColor":"#E5E7EB",
-  "primaryBorderColor":"#6366F1",
-  "lineColor":"#475569",
-  "secondaryColor":"#0D1117",
-  "tertiaryColor":"#111827",
-  "noteBkgColor":"#1A2035",
-  "noteTextColor":"#E5E7EB",
-  "edgeLabelBackground":"#111827",
-  "clusterBkg":"#111827",
-  "titleColor":"#E5E7EB",
-  "nodeBorder":"#6366F1",
-  "mainBkg":"#1A2035"
-}}}%%
-flowchart TD
-
-    %% ── PHASE 1: SETUP
-    A([🗂️ Lead CSV Upload\nfrom Client]) --> B[🔧 Normalize & Validate\nNames · Phone · Metadata]
-    B --> C[⚙️ Bot Configuration\nKB · Voice · System Prompt · DND Hours]
-    C --> D[📋 Pre-Campaign Checklist\nBaseline Metrics · Dedicated Agents · MSA]
-    D --> E{🧪 UAT Passed?\n100–200 test leads}
-    E -- ❌ Issues Found --> C
-    E -- ✅ Approved --> F
-
-    %% ── PHASE 2: CAMPAIGN LAUNCH
-    F([🚀 Campaign Launch\nWallet Charged · Go-Live])
-
-    F --> G[📞 AI Dialing Engine\nExotel · Concurrent Slots · 10AM–9PM]
-    F --> H[💬 WhatsApp Sequence\nParallel Track via WABA]
-
-    %% ── VOICE TRACK
-    G --> I{📡 Call Connected?}
-    I -- ❌ No Answer / DND --> J[📅 NBA: Reschedule\nDifferent time window]
-    J --> G
-
-    I -- ✅ Connected --> K[🤖 Bot Conversation Begins]
-    K --> K1[👋 Introduction\nPersona · Company · Purpose]
-    K1 --> K2[🔁 Multi-turn Q&A\nOne question at a time]
-    K2 --> K3[🎯 Qualification Scoring\nIntent · Budget · Timeline]
-
-    K3 --> L{📊 Lead Outcome}
-
-    L -- 🔥 HOT --> M[⚡ Immediate Handoff\nSame-day callback]
-    L -- 🌡️ WARM --> N[📤 Queue for Handoff\nCallback within 24 hrs]
-    L -- ❄️ COLD --> O[🔄 Continue NBA Loop]
-    L -- ⏱️ Call under 2 sec --> P[⚠️ Manual Audit]
-
-    %% ── WHATSAPP TRACK
-    H --> H1[📨 Message 1: Day 0\nTemplate — Utility / Marketing]
-    H1 --> H2{📬 Delivered?}
-    H2 -- ❌ Spam / Limit --> H_ERR[🚨 WABA Alert\nPause & Investigate]
-    H2 -- ✅ Delivered --> H3{💬 Response?}
-    H3 -- No --> H4[📨 Message 2: Day 2]
-    H4 --> H5[📨 Message 3: Day 4\n15–19% convert after 3rd msg]
-    H3 -- ✅ Replied --> K
-
-    %% ── NBA LOOP
-    O --> NBA{🔁 NBA Loop\nDays 1–7}
-    NBA -- More attempts --> G
-    NBA -- Days Exhausted --> U[❌ Mark Inactive]
-
-    %% ── HUMAN HANDOFF
-    M --> Q[👤 Human Agent\nClick-to-Call · Transcript Provided]
-    N --> Q
-    Q --> R{📞 Called within TAT?}
-    R -- ❌ TAT Breach --> S[📉 Lead Lost]
-    R -- ✅ Called --> T{🏆 Converted?}
-    T -- ✅ Yes --> CV[✅ Conversion Logged\nAttribution tracked]
-    T -- ❌ No --> FB[📝 Outcome Noted]
-
-    %% ── METRICS
-    CV --> V[📊 Campaign Metrics\nConnectivity · Qualification · Conversion]
-    FB --> V
-    S --> V
-    U --> V
-    P --> V
-
-    V --> W[📋 Audit Report\nShared with Client]
-    W --> X{📝 Contract Decision}
-    X -- 🎯 Go Live --> Y([🟢 Production\nFull Scale])
-    X -- 🔁 Optimize --> F
-
-    %% ── DAILY MONITORING
-    F -.->|Daily 2PM check| MON[🔍 Daily Monitoring\nCall volume · WABA quality · NBA]
-    MON -.-> F
-
-    %% ── STYLES
-    classDef phase fill:#1a1560,stroke:#6366F1,stroke-width:2px,color:#A5B4FC,font-weight:700
-    classDef decision fill:#1c1230,stroke:#8B5CF6,stroke-width:2px,color:#C4B5FD,font-weight:600
-    classDef action fill:#0f1729,stroke:#3B82F6,stroke-width:1.5px,color:#93C5FD
-    classDef success fill:#052e16,stroke:#10B981,stroke-width:2px,color:#6EE7B7,font-weight:700
-    classDef danger fill:#2d0c0c,stroke:#F43F5E,stroke-width:1.5px,color:#FCA5A5
-    classDef warn fill:#1c1407,stroke:#F59E0B,stroke-width:1.5px,color:#FCD34D
-    classDef monitor fill:#0f0a20,stroke:#A78BFA,stroke-width:1.5px,color:#C4B5FD,stroke-dasharray:5
-
-    class A,F,Y phase
-    class E,I,L,H2,H3,NBA,R,T,X decision
-    class B,C,D,G,H,H1,H4,H5,J,K,K1,K2,K3,M,N,O,P,Q action
-    class CV,V,W success
-    class H_ERR,S danger
-    class U,FB warn
-    class MON monitor
-</div>
-</div>
-
-<div class="legend">
-  <div class="legend-item"><div class="dot" style="background:#6366F1"></div> Campaign Phase</div>
-  <div class="legend-item"><div class="dot" style="background:#8B5CF6"></div> Decision Point</div>
-  <div class="legend-item"><div class="dot" style="background:#3B82F6"></div> Process Action</div>
-  <div class="legend-item"><div class="dot" style="background:#10B981"></div> Success / Metric</div>
-  <div class="legend-item"><div class="dot" style="background:#F43F5E"></div> Error / Risk</div>
-  <div class="legend-item"><div class="dot" style="background:#A78BFA"></div> Monitoring Loop</div>
-</div>
-
-<div class="metrics">
-  <div class="mc"><div class="val">70–80%</div><div class="lbl">Connectivity<br>Rate Target</div></div>
-  <div class="mc"><div class="val">10–31%</div><div class="lbl">Qualification<br>Rate (Hot+Warm)</div></div>
-  <div class="mc"><div class="val">~20%</div><div class="lbl">Conversion Lift<br>vs Baseline</div></div>
-  <div class="mc"><div class="val">Day 0</div><div class="lbl">Max TAT for<br>Human Callback</div></div>
-  <div class="mc"><div class="val">3+</div><div class="lbl">WhatsApp Msgs<br>Before Drop</div></div>
-  <div class="mc"><div class="val">1–7 Days</div><div class="lbl">NBA Loop<br>Duration</div></div>
-</div>
-
-<div class="ft">Convin Sense &nbsp;·&nbsp; <span>AI Sales Activation Platform</span> &nbsp;·&nbsp; Built from KB, pilot chats &amp; product docs &nbsp;·&nbsp; 2026</div>
-
-<script>mermaid.initialize({startOnLoad:true, securityLevel:'loose', flowchart:{curve:'basis', padding:20}});</script>
-</body>
-</html>"""
-
-
-def _render_flowchart_tab():
-    """Render the classy dark-themed Convin Sense process flowchart."""
-    _components.html(_FLOWCHART_HTML, height=3400, scrolling=True)
-
-
-# ══════════════════════════════════════════════════════════════════
-#  REAL LIFE Q&A — Settings upload UI + generator + display
-# ══════════════════════════════════════════════════════════════════
-
-_RLQA_ALL_TYPES = [
-    "txt", "zip", "html", "htm",
-    "pdf", "docx", "doc",
-    "xlsx", "xls", "csv",
-    "pptx", "ppt",
-    "json",
-    "png", "jpg", "jpeg", "webp", "gif",
-    "mp4", "mp3", "ogg", "opus", "aac", "wav",
-    "rtf", "epub", "eml", "ipynb",
-    "py", "js", "ts", "md",
-]
-
-_RLQA_CAT_ICONS = {
-    "Product Features":           "⚙️",
-    "Pricing & Plans":            "💰",
-    "Onboarding & Setup":         "🚀",
-    "Integrations":               "🔗",
-    "Technical Support":          "🛠️",
-    "Use Cases":                  "🎯",
-    "Billing & Payments":         "💳",
-    "Security & Compliance":      "🛡️",
-    "AI Capabilities":            "🤖",
-    "Reporting & Analytics":      "📊",
-    "Sales & Demos":              "💼",
-    "FAQs & General":             "❓",
-    "Convin Sense Pilot":         "📋",
-    "Bot Configuration":          "⚙️",
-    "Client Objections":          "💬",
-    "Performance Metrics":        "📈",
-    "Troubleshooting":            "🔧",
-    "Data & Privacy":             "🔒",
-    "WhatsApp Channel":           "💬",
-    "Voice Call Engine":          "📞",
-    "NBA & Follow-up":            "🔁",
-    "Human Handoff":              "👤",
-    "ROI & Business Value":       "📊",
-    "Other":                      "📌",
-}
-
-
-def _parse_rlqa_file(f) -> tuple[str, dict]:
-    """Parse any uploaded file → (content_text, meta). Returns ('', {}) on failure."""
-    fname = f.name.lower()
-    meta = {"valid": True, "total": 0, "participants": [], "msg_counts": {},
-            "first_date": "", "last_date": "", "date_range": "", "file_type": "document"}
-
-    # ── WhatsApp HTML export ───────────────────────────────────
-    if fname.endswith(".html") or fname.endswith(".htm"):
-        raw_bytes = f.read()
-        html_str = raw_bytes.decode("utf-8", "ignore")
-        content, html_meta = parse_wa_html(html_str)
-        if html_meta.get("valid") and html_meta.get("total", 0) >= 3:
-            return content, html_meta
-        # Not a WA HTML — parse as generic HTML doc
-        try:
-            from bs4 import BeautifulSoup as _BS
-            content = _BS(html_str, "html.parser").get_text("\n")
-            meta["file_type"] = "document"
-            return content, meta
-        except Exception:
-            return html_str, meta
-
-    # ── WhatsApp zip ───────────────────────────────────────────
-    if fname.endswith(".zip"):
-        try:
-            raw_bytes = f.read()
-            with zipfile.ZipFile(io.BytesIO(raw_bytes)) as zf:
-                txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
-                html_files = [n for n in zf.namelist()
-                              if n.endswith(".html") or n.endswith(".htm")]
-                if txt_files:
-                    raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
-                    content = parse_wa(raw)
-                    m = parse_wa_meta(content)
-                    if m["valid"] and m["total"] >= 3:
-                        m["file_type"] = "whatsapp"
-                        return content, m
-                if html_files:
-                    html_str = zf.read(html_files[0]).decode("utf-8", "ignore")
-                    content, m = parse_wa_html(html_str)
-                    if m["valid"] and m["total"] >= 3:
-                        return content, m
-                # fallback: any parseable doc inside zip
-                for zname in zf.namelist():
-                    if any(zname.lower().endswith(e) for e in
-                           [".pdf", ".docx", ".csv", ".json", ".txt"]):
-                        inner = io.BytesIO(zf.read(zname))
-                        inner.name = zname
-                        try:
-                            content = parse_file(inner)
-                            return content, meta
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-        return "", {}
-
-    # ── Plain txt — try WhatsApp first ────────────────────────
-    if fname.endswith(".txt"):
-        raw = f.read().decode("utf-8", "ignore")
-        content = parse_wa(raw)
-        m = parse_wa_meta(content)
-        if m["valid"] and m["total"] >= 5:
-            m["file_type"] = "whatsapp"
-            return content, m
-        # Plain text document
-        meta["file_type"] = "document"
-        return raw, meta
-
-    # ── All other formats via parse_file ──────────────────────
+def initiate_voice_call(phone_number: str, voice_agent_api_key: str) -> dict:
+    """Initiate voice call with Convin Voice Agent"""
     try:
-        content = parse_file(f)
-        meta["file_type"] = "document"
-        return content, meta
-    except Exception:
-        return "", {}
-
-
-def _render_rlqa_settings():
-    """Settings UI for Real Life Q&A uploads (any format)."""
-    st.markdown("""
-    <div style='background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.20);
-    border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:0.83rem;color:#A5F3FC'>
-    📂 <b>Real Life Q&amp;A</b> — Upload any real-world files to generate Convin Sense-focused Q&amp;A pairs.
-    Supports <b>WhatsApp HTML/TXT/ZIP exports</b>, PDF, DOCX, XLSX, PPTX, HTML, CSV, JSON, images, audio, code, notebooks.
-    Q&amp;As are generic (no client context) and appear in the Answer Studio's Real Life Q&amp;A tab.
-    </div>
-    """, unsafe_allow_html=True)
-
-    rlqa_files = st.session_state.get("kb_rlqa_files", [])
-    existing_names = {f["name"] for f in rlqa_files}
-
-    uploads = st.file_uploader(
-        "Upload files (any format)",
-        type=_RLQA_ALL_TYPES,
-        key="rlqa_uploader",
-        label_visibility="visible",
-        accept_multiple_files=True,
-    )
-
-    if uploads:
-        new_ups = [u for u in uploads if u.name not in existing_names]
-        already = [u.name for u in uploads if u.name in existing_names]
-        if already:
-            st.info(f"Already added: {', '.join(already)}")
-
-        if new_ups:
-            if st.button("➕ Add Files", key="rlqa_add_btn", type="primary"):
-                added, skipped = 0, []
-                for up in new_ups:
-                    content, meta = _parse_rlqa_file(up)
-                    if not content or len(content.strip()) < 20:
-                        skipped.append(f"{up.name} (no text extracted)")
-                        continue
-                    ftype = meta.get("file_type", "document")
-                    total_msgs = meta.get("total", 0)
-                    type_badge = (
-                        f"WhatsApp HTML ({total_msgs:,} msgs)" if ftype == "whatsapp_html"
-                        else f"WhatsApp TXT ({total_msgs:,} msgs)" if ftype == "whatsapp"
-                        else "Document"
-                    )
-                    st.session_state.kb_rlqa_files.append({
-                        "name":      up.name,
-                        "content":   content,
-                        "added_at":  datetime.now().isoformat(),
-                        "size":      len(content),
-                        "meta":      meta,
-                        "type_badge": type_badge,
-                    })
-                    added += 1
-                if added:
-                    save_kb()
-                    st.success(f"✅ {added} file(s) added to Real Life Q&A.")
-                    st.rerun()
-                if skipped:
-                    st.warning(f"⚠️ Skipped: {', '.join(skipped)}")
-
-    # ── File list ────────────────────────────────────────────────
-    rlqa_files = st.session_state.get("kb_rlqa_files", [])
-    if not rlqa_files:
-        st.markdown(
-            "<div style='padding:24px;text-align:center;color:#475569;font-size:0.85rem'>"
-            "No files uploaded yet.</div>",
-            unsafe_allow_html=True,
-        )
-        return
-
-    st.markdown(
-        f"<div style='font-weight:600;color:#A5F3FC;margin:16px 0 10px;font-size:0.82rem'>"
-        f"UPLOADED FILES — {len(rlqa_files)}</div>",
-        unsafe_allow_html=True,
-    )
-    for i, rf in enumerate(rlqa_files):
-        fa, fb = st.columns([6, 1])
-        with fa:
-            badge_color = "#10B981" if "WhatsApp" in rf.get("type_badge","") else "#6366F1"
-            st.markdown(
-                f'<div class="file-row" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px 14px">'
-                f'<div style="display:flex;align-items:center;gap:8px">'
-                f'<span class="file-row-icon">📂</span>'
-                f'<span class="file-row-name">{rf["name"]}</span>'
-                f'<span class="file-row-meta">{rf["size"]:,} chars · {ts_label(rf["added_at"])}</span>'
-                f'</div>'
-                f'<div style="font-size:0.7rem;color:{badge_color};padding-left:24px">'
-                f'{rf.get("type_badge","Document")}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        with fb:
-            if st.button("Remove", key=f"rm_rlqa_{i}", type="secondary"):
-                st.session_state.kb_rlqa_files.pop(i)
-                save_kb(); st.rerun()
-
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-    if st.button("📂 Go to Real Life Q&A →", key="rlqa_goto_btn", type="primary"):
-        st.session_state.page = "faq"
-        st.rerun()
-
-
-_WA_GENERIC_CATS = [
-    "Client Learnings: Bot Performance",
-    "Client Learnings: Connectivity & Metrics",
-    "Client Learnings: Onboarding & Setup",
-    "Client Learnings: Common Objections & Responses",
-    "Client Learnings: Sales Process",
-    "Client Learnings: Product Issues & Fixes",
-    "Client Learnings: Feature Requests",
-    "Client Learnings: Best Practices",
-    "Client Learnings: ROI & Business Case",
-    "Client Learnings: WhatsApp & Multi-Channel",
-    "Client Learnings: Lead & Data Quality",
-    "Client Learnings: Human Handoff & Callbacks",
-]
-
-
-def _generate_wa_generic_qas(progress_cb=None) -> list[dict]:
-    """Extract max generic Q&As from all kb_whatsapp — no client-specific names/references."""
-    ai_client = get_client()
-    all_qas: list[dict] = []
-    chats = st.session_state.get("kb_whatsapp", [])
-    if not chats:
-        return []
-
-    cats_str = "\n".join(f"  - {c}" for c in _WA_GENERIC_CATS)
-    CHUNK = 45_000
-
-    valid_chats = [w for w in chats
-                   if w.get("content") and not w.get("meta", {}).get("is_attachment")]
-    total_chunks = sum(
-        max(1, (len(w["content"]) + CHUNK - 1) // CHUNK) for w in valid_chats
-    )
-    done = 0
-
-    for w in valid_chats:
-        content = w["content"].strip()
-        chunks = [content[i:i+CHUNK] for i in range(0, len(content), CHUNK)]
-
-        for ci, chunk in enumerate(chunks):
-            done += 1
-            if progress_cb:
-                pct = 0.04 + (done / max(total_chunks, 1)) * 0.88
-                progress_cb(pct, f"📦 {w['name']} · chunk {ci+1}/{len(chunks)}…")
-
-            prompt = (
-                "You are extracting a GENERIC knowledge base from real WhatsApp conversations "
-                "between Convin's internal teams about Convin Sense (AI voice bot) pilot deployments.\n\n"
-                "CRITICAL RULES:\n"
-                "• DO NOT mention specific client or company names — anonymise and generalise everything.\n"
-                "• Generalise patterns across clients (e.g. 'clients typically achieve X%' not 'ABC achieved X%').\n"
-                "• Write questions from the perspective of a support agent, sales rep, or new employee.\n"
-                "• Answers: 3–6 sentences, include specific numbers/percentages where available, be actionable.\n"
-                "• Extract the MAXIMUM possible Q&A pairs — every fact, number, process, "
-                "decision, objection, bug, fix → one Q&A.\n"
-                "• Skip only: pure greetings, 'ok'/'noted', scheduling noise, 'media omitted', trivial ack.\n\n"
-                "WHAT TO EXTRACT (be exhaustive):\n"
-                "• Connectivity rates, qualification %, conversion rates seen across deployments\n"
-                "• Bot configuration patterns — voice, persona, system prompt, DND hours, KB setup\n"
-                "• Common client objections and how they were resolved\n"
-                "• Onboarding steps, timelines, pre-campaign checklists\n"
-                "• Bugs, hallucinations, misclassifications and their fixes\n"
-                "• WhatsApp + voice campaign best practices and sequencing\n"
-                "• Feature requests that reflect real customer pain points\n"
-                "• ROI data points, CPA, business case stats used with clients\n"
-                "• NBA (Next Best Action) loops, retry logic, DND handling\n"
-                "• Lead CSV format requirements, data quality standards\n"
-                "• Human handoff TAT, agent callback processes\n"
-                "• UAT process, test lead counts, go-live criteria\n\n"
-                f"CATEGORIES (assign exactly one per Q&A):\n{cats_str}\n\n"
-                "Return ONLY a raw JSON array — no markdown fences, no preamble:\n"
-                '[\n  {"category":"...", "question":"...", "answer":"..."},\n  ...\n]\n\n'
-                "CHAT:\n" + chunk
-            )
-
-            try:
-                r = ai_client.messages.create(
-                    model="claude-haiku-4-5-20251001",
-                    max_tokens=14000,
-                    messages=[{
-                        "role": "user",
-                        "content": [{"type": "text", "text": prompt,
-                                     "cache_control": {"type": "ephemeral"}}],
-                    }],
-                    extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-                )
-                raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
-                raw = re.sub(r"\n?```$", "", raw)
-                items = json.loads(raw)
-                for item in items:
-                    if isinstance(item, dict) and item.get("question"):
-                        all_qas.append({
-                            "category": str(item.get("category", _WA_GENERIC_CATS[0])),
-                            "question": str(item.get("question", "")),
-                            "answer":   str(item.get("answer", "")),
-                        })
-            except Exception:
-                pass
-
-    if progress_cb:
-        progress_cb(0.95, "✨ Deduplicating…")
-
-    seen: set[str] = set()
-    deduped = []
-    for qa in all_qas:
-        key = qa["question"].lower().strip()
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(qa)
-
-    if progress_cb:
-        progress_cb(1.0, f"✅ {len(deduped)} Q&As extracted")
-
-    return deduped
-
-
-def _generate_rlqa(progress_cb=None) -> list[dict]:
-    """Generate generic Convin Sense Q&As from all Real Life Q&A files."""
-    ai_client = get_client()
-    all_qas: list[dict] = []
-    files = st.session_state.get("kb_rlqa_files", [])
-    if not files:
-        return []
-
-    for fi, rf in enumerate(files):
-        content = rf.get("content", "").strip()
-        if not content:
-            continue
-        meta = rf.get("meta", {})
-        ftype = meta.get("file_type", "document")
-        plist = ", ".join(meta.get("participants", [])[:6]) if meta.get("participants") else "—"
-        drange = meta.get("date_range", "")
-        total_m = meta.get("total", 0)
-
-        if progress_cb:
-            progress_cb(
-                0.05 + (fi / len(files)) * 0.85,
-                f"📂 Processing {rf['name']} ({fi+1}/{len(files)})…",
-            )
-
-        if ftype in ("whatsapp", "whatsapp_html"):
-            source_header = (
-                f"WhatsApp {'HTML' if ftype == 'whatsapp_html' else 'TXT'} export: {rf['name']}\n"
-                f"Participants: {plist}\n"
-                f"Date range: {drange} | Messages: {total_m}\n\n"
-                "These are REAL conversations about Convin Sense from internal pilot/sales/support teams.\n\n"
-                "EXTRACT:\n"
-                "• Product Q&As — what is X, how does Y work, what's the difference between A and B\n"
-                "• Pilot metrics & outcomes — connectivity%, qualification%, conversion rates\n"
-                "• Common objections and the best responses given\n"
-                "• Setup, configuration, and onboarding decisions\n"
-                "• Bugs and their resolutions\n"
-                "• Feature requests that reflect customer needs\n"
-                "• ROI and business value discussions\n"
-            )
-        else:
-            source_header = (
-                f"Document: {rf['name']}\n\n"
-                "EXTRACT every fact, process, feature, policy, and topic as a Q&A pair.\n"
-                "Turn every sentence into: 'What is X?' / 'How does Y work?' / 'Why does Z matter?'\n"
-                "Be exhaustive — cover everything in the document.\n"
-            )
-
-        cats_str = ", ".join(_RLQA_CAT_ICONS.keys())
-        prompt = (
-            "You are building a Convin Sense knowledge base from real-world source material.\n\n"
-            + source_header
-            + "\nRULES:\n"
-            "• Write questions from a support agent or customer perspective.\n"
-            "• Answers: 2–5 sentences, clear and support-friendly. No fluff.\n"
-            "• Skip: greetings, 'ok'/'noted', scheduling noise, media omitted.\n"
-            "• Deduplicate: keep the best version if the same topic appears multiple times.\n"
-            f"• Assign ONE category per Q&A from: {cats_str}.\n\n"
-            "Return ONLY a raw JSON array:\n"
-            '[\n  {"category":"Product Features","question":"Q?","answer":"A."},\n  ...\n]\n\n'
-            "Be exhaustive — extract EVERY piece of knowledge.\n\n"
-            f"{'CHAT' if ftype in ('whatsapp','whatsapp_html') else 'DOCUMENT'}:\n"
-            + content[:MAX_CTX]
-        )
-
-        try:
-            r = ai_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=14000,
-                messages=[{
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt,
-                                 "cache_control": {"type": "ephemeral"}}],
-                }],
-                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-            )
-            raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
-            raw = re.sub(r"\n?```$", "", raw)
-            items = json.loads(raw)
-            for item in items:
-                if isinstance(item, dict) and item.get("question"):
-                    all_qas.append({
-                        "id":           str(uuid.uuid4()),
-                        "category":     str(item.get("category", "Other")),
-                        "question":     str(item.get("question", "")),
-                        "answer":       str(item.get("answer", "")),
-                        "edited":       False,
-                        "source_file":  rf["name"],
-                        "generated_at": datetime.now().isoformat(),
-                    })
-        except Exception:
-            pass
-
-    if progress_cb:
-        progress_cb(0.92, "✨ Deduplicating…")
-
-    seen: set[str] = set()
-    deduped = []
-    for qa in all_qas:
-        key = qa["question"].lower().strip()
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(qa)
-
-    if progress_cb:
-        progress_cb(1.0, "✅ Done")
-
-    return deduped
-
-
-def _render_rlqa_tab():
-    """Answer Studio tab: Real Life Q&A — search, filter, edit, generate."""
-    rlqa_qas  = st.session_state.get("kb_rlqa_qas", [])
-    rlqa_files = st.session_state.get("kb_rlqa_files", [])
-
-    if not rlqa_files and not rlqa_qas:
-        st.markdown("""
-        <div style='text-align:center;padding:48px 20px;color:#374151'>
-          <div style='font-size:3rem;margin-bottom:14px'>📂</div>
-          <div style='font-size:1.05rem;font-weight:700;color:#4B5563;margin-bottom:8px'>
-            No files uploaded yet
-          </div>
-          <div style='font-size:0.83rem'>
-            Go to Settings → Real Life Q&amp;A to upload WhatsApp exports, PDFs, and more.
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("⚙ Open Settings", key="rlqa_open_settings", type="primary"):
-            st.session_state.page = "settings"
-            st.rerun()
-        return
-
-    # ── Stats ─────────────────────────────────────────────────────
-    n_qas    = len(rlqa_qas)
-    n_cats   = len(set(q["category"] for q in rlqa_qas))
-    n_files  = len(rlqa_files)
-    n_edited = len([q for q in rlqa_qas if q.get("edited")])
-    last_gen = rlqa_qas[0].get("generated_at", "") if rlqa_qas else ""
-
-    rc1, rc2, rc3, rc4 = st.columns(4)
-    for col, val, lbl in [
-        (rc1, str(n_qas), "Q&As Generated"),
-        (rc2, str(n_cats), "Categories"),
-        (rc3, str(n_files), "Source Files"),
-        (rc4, ts_label(last_gen) if last_gen else "Never", "Last Generated"),
-    ]:
-        col.markdown(
-            f'<div class="cqa-stat-card"><div class="cqa-stat-val" '
-            f'style="font-size:{"1.5rem" if len(val)<=5 else "0.95rem"}">{val}</div>'
-            f'<div class="cqa-stat-lbl">{lbl}</div></div>',
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-    # ── Action buttons ────────────────────────────────────────────
-    ra1, ra2, ra3, ra4 = st.columns([2.5, 1.5, 1.5, 1.5])
-    with ra1:
-        rlqa_gen_btn = st.button(
-            "✨ Generate Q&As" if not rlqa_qas else "🔄 Regenerate Q&As",
-            key="rlqa_gen_btn", type="primary", use_container_width=True,
-            disabled=(not rlqa_files),
-        )
-    with ra2:
-        if rlqa_qas:
-            st.download_button(
-                "⬇️ JSON", use_container_width=True,
-                data=json.dumps(rlqa_qas, indent=2, ensure_ascii=False),
-                file_name="reallife_qa.json", mime="application/json",
-                key="rlqa_dl_json",
-            )
-    with ra3:
-        if rlqa_qas:
-            lines = []
-            for cat in sorted(set(q["category"] for q in rlqa_qas)):
-                lines += [f"\n{'='*52}", f"  {cat.upper()}", f"{'='*52}\n"]
-                for idx, q in enumerate([x for x in rlqa_qas if x["category"] == cat], 1):
-                    lines += [f"Q{idx}. {q['question']}", f"A:  {q['answer']}\n"]
-            st.download_button(
-                "⬇️ TXT", use_container_width=True,
-                data="\n".join(lines), file_name="reallife_qa.txt", mime="text/plain",
-                key="rlqa_dl_txt",
-            )
-    with ra4:
-        if rlqa_qas and st.button("🗑️ Clear", key="rlqa_clear_btn",
-                                   use_container_width=True, type="secondary"):
-            st.session_state.kb_rlqa_qas = []
-            save_kb(); st.rerun()
-
-    # ── Generate handler ──────────────────────────────────────────
-    if rlqa_gen_btn:
-        rlqa_prog = st.empty()
-        rlqa_status = st.empty()
-        rlqa_prog.progress(0.05)
-        rlqa_status.markdown(
-            "<span style='color:#A5F3FC;font-size:0.85rem'>🤖 Generating Real Life Q&As…</span>",
-            unsafe_allow_html=True,
-        )
-        try:
-            def _rp(pct, lbl):
-                rlqa_prog.progress(pct)
-                rlqa_status.markdown(
-                    f"<span style='color:#A5F3FC;font-size:0.85rem'>{lbl}</span>",
-                    unsafe_allow_html=True,
-                )
-            new_qas = _generate_rlqa(_rp)
-            st.session_state.kb_rlqa_qas = new_qas
-            save_kb()
-            rlqa_prog.empty()
-            rlqa_status.success(
-                f"✅ {len(new_qas)} Q&As generated across "
-                f"{len(set(q['category'] for q in new_qas))} categories."
-            )
-            st.rerun()
-        except Exception as e:
-            rlqa_prog.empty()
-            rlqa_status.error(f"Error: {e}")
-
-    if not rlqa_qas:
-        if rlqa_files:
-            st.markdown(
-                "<div style='text-align:center;padding:32px;color:#374151;font-size:0.85rem'>"
-                "Click <b>Generate Q&As</b> above to extract knowledge from your files.</div>",
-                unsafe_allow_html=True,
-            )
-        return
-
-    # ── Search + filter ───────────────────────────────────────────
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    rs1, rs2 = st.columns([3, 1])
-    with rs1:
-        rlqa_search = st.text_input(
-            "search", placeholder="🔍  Search questions and answers…",
-            label_visibility="collapsed", key="rlqa_search",
-        )
-    with rs2:
-        rlqa_cats = ["All categories"] + sorted(set(q["category"] for q in rlqa_qas))
-        rlqa_cat_filter = st.selectbox(
-            "category", rlqa_cats, label_visibility="collapsed", key="rlqa_cat_filter",
-        )
-
-    slc = rlqa_search.lower().strip() if rlqa_search else ""
-    filtered = rlqa_qas
-    if rlqa_cat_filter and rlqa_cat_filter != "All categories":
-        filtered = [q for q in filtered if q["category"] == rlqa_cat_filter]
-    if slc:
-        filtered = [q for q in filtered
-                    if slc in q["question"].lower() or slc in q["answer"].lower()]
-
-    st.markdown(
-        f"<div style='font-size:0.78rem;color:#374151;margin:8px 0 16px'>"
-        f"Showing <b style='color:#22D3EE'>{len(filtered)}</b> of {n_qas} Q&amp;As</div>",
-        unsafe_allow_html=True,
-    )
-
-    # ── Category accordion ────────────────────────────────────────
-    rlqa_edit_id = st.session_state.get("rlqa_edit_id", "")
-    cats_in_view = list(dict.fromkeys(q["category"] for q in filtered))
-
-    for rci, cat in enumerate(cats_in_view):
-        cat_items = [q for q in filtered if q["category"] == cat]
-        icon = _RLQA_CAT_ICONS.get(cat, "📌")
-
-        with st.expander(
-            f"{icon}  {cat}  ·  {len(cat_items)} Q&As" + "\u200b" * (rci + 50),
-            expanded=(len(cats_in_view) == 1 or rci == 0),
-        ):
-            for qi, qa in enumerate(cat_items):
-                qa_id = qa["id"]
-                is_editing = (rlqa_edit_id == qa_id)
-                edited_badge = (
-                    '<span class="cqa-edited-badge">✎ edited</span>'
-                    if qa.get("edited") else ""
-                )
-                src = qa.get("source_file", "")
-
-                st.markdown(
-                    f'<div class="cqa-card">'
-                    f'<div class="cqa-q">Q: {qa["question"]}</div>'
-                    + (f'<div class="cqa-a">A: {qa["answer"]}</div>' if not is_editing else "")
-                    + f'<div class="cqa-meta">'
-                    f'<span class="cqa-cat-badge" style="border-color:rgba(34,211,238,0.3);'
-                    f'color:#22D3EE;background:rgba(34,211,238,0.08)">{cat}</span>'
-                    + edited_badge
-                    + (f'<span style="margin-left:8px;color:#1F2937;font-size:0.68rem">'
-                       f'📁 {src}</span>' if src else "")
-                    + f'</div></div>',
-                    unsafe_allow_html=True,
-                )
-
-                if is_editing:
-                    new_ans = st.text_area(
-                        "Edit answer", value=qa["answer"],
-                        key=f"rlqa_edit_area_{qa_id}", height=120,
-                        label_visibility="collapsed",
-                    )
-                    ec1, ec2 = st.columns(2)
-                    with ec1:
-                        if st.button("✅ Save", key=f"rlqa_save_{qa_id}", type="primary",
-                                     use_container_width=True):
-                            for item in st.session_state.kb_rlqa_qas:
-                                if item["id"] == qa_id:
-                                    item["answer"] = new_ans
-                                    item["edited"] = True
-                                    break
-                            st.session_state.rlqa_edit_id = ""
-                            save_kb(); st.rerun()
-                    with ec2:
-                        if st.button("✕ Cancel", key=f"rlqa_cancel_{qa_id}",
-                                     use_container_width=True):
-                            st.session_state.rlqa_edit_id = ""
-                            st.rerun()
-                else:
-                    eb1, eb2 = st.columns(2)
-                    with eb1:
-                        if st.button("✎ Edit", key=f"rlqa_edit_{qi}_{rci}",
-                                     use_container_width=True):
-                            st.session_state.rlqa_edit_id = qa_id
-                            st.rerun()
-                    with eb2:
-                        if st.button("🗑 Delete", key=f"rlqa_del_{qi}_{rci}",
-                                     use_container_width=True, type="secondary"):
-                            st.session_state.kb_rlqa_qas = [
-                                x for x in st.session_state.kb_rlqa_qas if x["id"] != qa_id
-                            ]
-                            save_kb(); st.rerun()
-
+        # This would call your Convin Voice Agent API
+        # For now, returning a mock response
+        return {
+            "status": "initiated",
+            "call_id": str(uuid.uuid4()),
+            "agent": "Convin Voice Agent",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # ══════════════════════════════════════════════════════════════════
-#  CLIENT ENGINE — Settings upload UI
+#  MAIN CONTENT
 # ══════════════════════════════════════════════════════════════════
+st.markdown('<div class="support-container"><div class="support-content">', unsafe_allow_html=True)
 
-def _render_client_engine_settings():
-    st.markdown("""
-    <div style='background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.22);
-    border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:0.83rem;color:#A5B4FC'>
-    🎯 <b>Client Engine</b> — Upload any client support files per client name.
-    Supported: <b>WhatsApp exports</b> (.txt, .zip) · <b>Documents</b> (PDF, DOCX, XLSX, PPTX, HTML, CSV, JSON) ·
-    <b>Rich text</b> (RTF, EPUB, EML) · <b>Code / notebooks</b> (.py, .ipynb, .md) · Images · Audio.
-    The AI extracts clean, client-specific Q&A pairs from every file format.
+# Title
+st.markdown("""
+<div style="text-align: center; margin-bottom: 32px; margin-top: 20px;">
+    <h1 style="color: #E5E7EB; font-size: 2.2rem; margin-bottom: 8px;">
+        Convin Support
+    </h1>
+    <p style="color: #94A3B8; font-size: 1rem;">
+        Connect via chat or voice — instant support available
+    </p>
+</div>
+""", unsafe_allow_html=True)
+
+# Widgets Grid
+st.markdown('<div class="widgets-grid">', unsafe_allow_html=True)
+
+# ── CHAT WIDGET ──
+st.markdown("""
+<div class="widget-container">
+    <div class="widget-header">
+        <div class="widget-icon">💬</div>
+        <div class="widget-title">Chat Support</div>
     </div>
-    """, unsafe_allow_html=True)
-
-    # ── Client name + file uploader ──────────────────────────────
-    col_n, col_u = st.columns([2, 3])
-    with col_n:
-        client_name_input = st.text_input(
-            "Client name", placeholder="e.g. HDFC Bank", key="cqe_client_name",
-            label_visibility="visible",
-        )
-    with col_u:
-        st.markdown("<div style='height:1px'></div>", unsafe_allow_html=True)
-        cqe_files = st.file_uploader(
-            "Upload files",
-            type=[
-                "txt", "zip",
-                "pdf", "docx", "doc",
-                "xlsx", "xls", "csv",
-                "pptx", "ppt",
-                "html", "htm",
-                "json",
-                "png", "jpg", "jpeg", "webp", "gif",
-                "mp4", "mp3", "ogg", "opus", "aac", "wav",
-                "rtf", "epub", "eml", "ipynb",
-                "py", "js", "ts", "md",
-            ],
-            key="cqe_uploader", label_visibility="visible",
-            accept_multiple_files=True,
-        )
-
-    if cqe_files and client_name_input.strip():
-        client_key = client_name_input.strip()
-        chats = st.session_state.get("kb_client_chats", [])
-        existing_names = {c["file_name"] for c in chats if c["client"] == client_key}
-
-        new_files = [f for f in cqe_files if f.name not in existing_names]
-        already   = [f.name for f in cqe_files if f.name in existing_names]
-        if already:
-            st.info(f"Already uploaded: {', '.join(already)}")
-
-        if new_files and st.button("➕ Add Files", key="cqe_add_btn", type="primary"):
-            added, skipped = 0, []
-            for cqe_file in new_files:
-                fname = cqe_file.name.lower()
-                content = ""
-                meta = {"valid": True, "total": 0, "participants": [],
-                        "msg_counts": {}, "first_date": "", "last_date": "",
-                        "date_range": "", "file_type": "document"}
-
-                # ── WhatsApp zip ──────────────────────────────────
-                if fname.endswith(".zip"):
-                    try:
-                        with zipfile.ZipFile(io.BytesIO(cqe_file.read())) as zf:
-                            txt_files = [n for n in zf.namelist() if n.endswith(".txt")]
-                            if txt_files:
-                                raw = zf.read(txt_files[0]).decode("utf-8", "ignore")
-                                content = parse_wa(raw)
-                                meta = parse_wa_meta(content)
-                                meta["file_type"] = "whatsapp"
-                            else:
-                                # zip with no .txt — try extracting any parseable file
-                                for zname in zf.namelist():
-                                    if any(zname.lower().endswith(e) for e in
-                                           [".pdf",".docx",".html",".csv",".json",".txt"]):
-                                        inner = io.BytesIO(zf.read(zname))
-                                        inner.name = zname
-                                        try:
-                                            content = parse_file(inner)
-                                            meta["file_type"] = "document"
-                                            break
-                                        except Exception:
-                                            pass
-                                if not content:
-                                    skipped.append(cqe_file.name)
-                                    continue
-                    except Exception as e:
-                        skipped.append(f"{cqe_file.name} ({e})")
-                        continue
-
-                # ── Plain txt — try WhatsApp parse first ─────────
-                elif fname.endswith(".txt"):
-                    raw = cqe_file.read().decode("utf-8", "ignore")
-                    content = parse_wa(raw)
-                    meta = parse_wa_meta(content)
-                    if meta["valid"] and meta["total"] >= 5:
-                        meta["file_type"] = "whatsapp"
-                    else:
-                        # Not a WA export — treat as plain text document
-                        content = raw
-                        meta = {"valid": True, "total": 0, "participants": [],
-                                "msg_counts": {}, "first_date": "", "last_date": "",
-                                "date_range": "", "file_type": "document"}
-
-                # ── All other formats — use parse_file ───────────
-                else:
-                    try:
-                        content = parse_file(cqe_file)
-                        meta["file_type"] = "document"
-                    except Exception as e:
-                        skipped.append(f"{cqe_file.name} ({e})")
-                        continue
-
-                if not content or len(content.strip()) < 20:
-                    skipped.append(f"{cqe_file.name} (no text extracted)")
-                    continue
-
-                st.session_state.kb_client_chats.append({
-                    "client":    client_key,
-                    "file_name": cqe_file.name,
-                    "content":   content,
-                    "added_at":  datetime.now().isoformat(),
-                    "size":      len(content),
-                    "meta":      meta,
-                })
-                added += 1
-
-            if added:
-                save_kb()
-                st.success(f"✅ {added} file(s) added for {client_key}.")
-                st.rerun()
-            if skipped:
-                st.warning(f"⚠️ Skipped: {', '.join(skipped)}")
-
-    elif cqe_files and not client_name_input.strip():
-        st.caption("Enter a client name above before uploading.")
-
-    # ── List uploaded client chats ────────────────────────────────
-    chats = st.session_state.get("kb_client_chats", [])
-    if not chats:
-        st.markdown(
-            "<div style='padding:24px;text-align:center;color:#475569;font-size:0.85rem'>"
-            "No client chats uploaded yet.</div>",
-            unsafe_allow_html=True,
-        )
-        return
-
-    st.markdown(f"<div style='font-weight:600;color:#A5B4FC;margin:16px 0 10px;font-size:0.82rem'>"
-                f"UPLOADED CLIENT CHATS — {len(chats)}</div>", unsafe_allow_html=True)
-
-    clients_seen: set[str] = set()
-    for i, chat in enumerate(chats):
-        cname = chat["client"]
-        if cname not in clients_seen:
-            clients_seen.add(cname)
-            st.markdown(
-                f"<div style='font-size:0.72rem;font-weight:700;color:#6366F1;letter-spacing:1px;"
-                f"text-transform:uppercase;margin:14px 0 6px'>{cname}</div>",
-                unsafe_allow_html=True,
-            )
-        meta = chat.get("meta", {})
-        total_m = meta.get("total", 0)
-        drange  = meta.get("date_range", "")
-        ca, cb = st.columns([6, 1])
-        with ca:
-            st.markdown(
-                f'<div class="file-row" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px 14px">'
-                f'<div style="display:flex;align-items:center;gap:8px">'
-                f'<span class="file-row-icon">💬</span>'
-                f'<span class="file-row-name">{chat["file_name"]}</span>'
-                f'<span class="file-row-meta">{chat["size"]:,} chars · {ts_label(chat["added_at"])}</span>'
-                f'</div>'
-                f'<div style="font-size:0.7rem;color:#6EE7B7;padding-left:24px">'
-                f'📅 {drange} &nbsp;·&nbsp; 💬 {total_m:,} messages</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-        with cb:
-            if st.button("Remove", key=f"rm_cqe_{i}", type="secondary"):
-                st.session_state.kb_client_chats.pop(i)
-                # Also clear generated Q&As for this client if no chats remain
-                remaining = [c for c in st.session_state.kb_client_chats if c["client"] == cname]
-                if not remaining:
-                    qas = st.session_state.get("kb_client_qas", {})
-                    qas.pop(cname, None)
-                    st.session_state.kb_client_qas = qas
-                save_kb(); st.rerun()
-
-    # ── Quick link to Client Engine page ─────────────────────────
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-    if st.button("🎯 Go to Client Engine →", key="cqe_goto_btn", type="primary"):
-        st.session_state.page = "client_qa"
-        st.rerun()
-
-
-# ══════════════════════════════════════════════════════════════════
-#  CLIENT ENGINE — Q&A generator
-# ══════════════════════════════════════════════════════════════════
-
-_CQA_CATS = [
-    "Billing & Payments", "Technical Support", "Account Management",
-    "Product Features", "Onboarding & Setup", "Complaints & Escalations",
-    "General Inquiry", "Policy & Compliance", "Pricing & Plans",
-    "Integration & API", "Data & Reporting", "Other",
-]
-
-def _generate_client_qas(client_name: str, chats: list[dict], progress_cb=None) -> list[dict]:
-    """Generate clean support Q&A pairs from client WhatsApp chat exports."""
-    ai_client = get_client()
-    all_qas: list[dict] = []
-    total = len(chats)
-
-    for ci, chat in enumerate(chats):
-        content = chat.get("content", "").strip()
-        if not content:
-            continue
-        meta = chat.get("meta", {})
-        plist = ", ".join(meta.get("participants", [])[:6])
-        drange = meta.get("date_range", "")
-        total_m = meta.get("total", "?")
-
-        if progress_cb:
-            progress_cb(
-                0.1 + (ci / total) * 0.75,
-                f"🤖 Extracting Q&As from {chat['file_name']} ({ci+1}/{total})…",
-            )
-
-        file_type = meta.get("file_type", "document")
-        if file_type == "whatsapp":
-            source_desc = (
-                f"WhatsApp customer support chat for client: {client_name}\n"
-                f"Participants: {plist}\n"
-                f"Date range: {drange} | Messages: {total_m}\n\n"
-                "TASK: Extract CLEAN, ACTIONABLE support Q&A pairs.\n\n"
-                "RULES:\n"
-                "• Focus ONLY on customer questions + agent/support answers.\n"
-                "• Rephrase the question in clean, general English (remove names, dates, chat noise).\n"
-                "• Answer should be concise (2–4 sentences), accurate, and support-friendly.\n"
-                "• SKIP: greetings, acknowledgements ('ok', 'noted', 'sure'), scheduling, media omitted, jokes.\n"
-                "• SKIP internal team discussions — only customer-facing Q&As.\n"
-            )
-        else:
-            source_desc = (
-                f"Support document / transcript for client: {client_name}\n"
-                f"File: {chat['file_name']}\n\n"
-                "TASK: Extract CLEAN, ACTIONABLE support Q&A pairs from this document.\n\n"
-                "RULES:\n"
-                "• Turn every fact, process, policy, or topic into a clear Question + Answer.\n"
-                "• Rephrase in natural support English — questions a customer would actually ask.\n"
-                "• Answer should be concise (2–4 sentences), accurate, and support-friendly.\n"
-                "• Cover every topic in the document — be exhaustive.\n"
-            )
-
-        prompt = (
-            f"You are a support knowledge engineer. Analyze this {'' if file_type == 'whatsapp' else 'document for '}client: {client_name}.\n"
-            + source_desc
-            + "• Deduplicate: if same question appears multiple times, keep only the best answer.\n"
-            f"• Assign ONE category per Q&A from: {', '.join(_CQA_CATS)}.\n\n"
-            "Return ONLY raw JSON array:\n"
-            '[\n  {"category": "Technical Support", "question": "How do I reset my password?", '
-            '"answer": "Click Forgot Password on the login screen..."},\n  ...\n]\n\n'
-            "Be comprehensive — extract every genuine support Q&A pair.\n\n"
-            f"{'CHAT' if file_type == 'whatsapp' else 'DOCUMENT'}:\n" + content[:MAX_CTX]
-        )
-
-        try:
-            r = ai_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=12000,
-                messages=[{
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt,
-                                 "cache_control": {"type": "ephemeral"}}],
-                }],
-                extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"},
-            )
-            raw = re.sub(r"^```[a-z]*\n?", "", r.content[0].text.strip())
-            raw = re.sub(r"\n?```$", "", raw)
-            items = json.loads(raw)
-            for item in items:
-                if isinstance(item, dict) and item.get("question"):
-                    all_qas.append({
-                        "id":           str(uuid.uuid4()),
-                        "category":     str(item.get("category", "General Inquiry")),
-                        "question":     str(item.get("question", "")),
-                        "answer":       str(item.get("answer", "")),
-                        "edited":       False,
-                        "source_file":  chat["file_name"],
-                        "generated_at": datetime.now().isoformat(),
-                    })
-        except Exception:
-            pass
-
-    if progress_cb:
-        progress_cb(0.9, "✨ Deduplicating…")
-
-    # Deduplicate by question
-    seen: set[str] = set()
-    deduped = []
-    for qa in all_qas:
-        key = qa["question"].lower().strip()
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(qa)
-
-    if progress_cb:
-        progress_cb(1.0, "✅ Done")
-
-    return deduped
-
-
-# ══════════════════════════════════════════════════════════════════
-#  CLIENT ENGINE — Main page
-# ══════════════════════════════════════════════════════════════════
-
-def render_client_qa():
-    render_topnav(show_settings_btn=True, show_back_btn=False)
-
-    # ── Inline CSS extras for this page ──────────────────────────
-    st.markdown("""
-    <style>
-    .cqa-header { padding: 32px 0 8px; }
-    .cqa-eyebrow {
-        display: inline-flex; align-items: center; gap: 8px;
-        background: rgba(99,102,241,0.12);
-        border: 1px solid rgba(99,102,241,0.28);
-        border-radius: 100px; padding: 5px 16px;
-        font-size: 11px; font-weight: 700; letter-spacing: 2px;
-        text-transform: uppercase; color: #818CF8; margin-bottom: 12px;
-    }
-    .cqa-title {
-        font-size: 1.65rem; font-weight: 800; color: #E5E7EB;
-        background: linear-gradient(135deg, #E5E7EB 30%, #818CF8 70%, #22D3EE 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text; line-height: 1.15;
-    }
-    .cqa-sub { color: #6B7280; font-size: 14px; margin-top: 8px; line-height: 1.6; }
-
-    .client-pill {
-        display: inline-flex; align-items: center; gap: 6px;
-        padding: 7px 18px; border-radius: 100px;
-        font-size: 0.8rem; font-weight: 600; cursor: pointer;
-        border: 1px solid rgba(255,255,255,0.09);
-        background: rgba(17,24,39,0.7); color: #9CA3AF;
-        transition: all .18s;
-    }
-    .client-pill-active {
-        background: rgba(99,102,241,0.2) !important;
-        border-color: rgba(99,102,241,0.5) !important;
-        color: #A5B4FC !important;
-    }
-
-    .cqa-stat-card {
-        background: rgba(17,24,39,0.85);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 14px; padding: 16px 20px; text-align: center;
-    }
-    .cqa-stat-val { font-size: 1.5rem; font-weight: 800; color: #818CF8; }
-    .cqa-stat-lbl { font-size: 11px; color: #4B5563; margin-top: 4px; }
-
-    .cqa-card {
-        background: rgba(13,17,23,0.9);
-        border: 1px solid rgba(255,255,255,0.06);
-        border-radius: 12px; padding: 16px 18px;
-        margin-bottom: 8px; transition: border-color .2s;
-    }
-    .cqa-card:hover { border-color: rgba(99,102,241,0.3); }
-    .cqa-q {
-        font-size: 0.9rem; font-weight: 600; color: #E5E7EB;
-        line-height: 1.5; margin-bottom: 8px;
-    }
-    .cqa-a {
-        font-size: 0.83rem; color: #9CA3AF; line-height: 1.65;
-    }
-    .cqa-meta {
-        font-size: 0.7rem; color: #374151; margin-top: 8px;
-    }
-    .cqa-cat-badge {
-        display: inline-block; padding: 2px 10px;
-        background: rgba(99,102,241,0.12);
-        border: 1px solid rgba(99,102,241,0.2);
-        border-radius: 100px; font-size: 0.68rem;
-        color: #818CF8; font-weight: 600;
-        margin-right: 6px;
-    }
-    .cqa-edited-badge {
-        display: inline-block; padding: 2px 10px;
-        background: rgba(16,185,129,0.12);
-        border: 1px solid rgba(16,185,129,0.22);
-        border-radius: 100px; font-size: 0.68rem;
-        color: #6EE7B7; font-weight: 600;
-    }
-    .no-cqa {
-        text-align: center; padding: 60px 20px;
-        color: #374151;
-    }
-    .no-cqa h3 { color: #4B5563; font-size: 1.1rem; margin-bottom: 8px; }
-    </style>
-    """, unsafe_allow_html=True)
-
-    chats_all = st.session_state.get("kb_client_chats", [])
-    client_qas = st.session_state.get("kb_client_qas", {})
-
-    # ── Page header ───────────────────────────────────────────────
-    st.markdown("""
-    <div class="cqa-header">
-      <div class="cqa-eyebrow">✦ Client Engine</div>
-      <div class="cqa-title">Client Answer Engine</div>
-      <div class="cqa-sub">AI-generated Q&amp;A from per-client WhatsApp support chats — clean, searchable, editable.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Empty state ───────────────────────────────────────────────
-    if not chats_all:
-        st.markdown("""
-        <div class="no-cqa">
-          <div style="font-size:3rem;margin-bottom:16px">🎯</div>
-          <h3>No client chats uploaded yet</h3>
-          <p style="color:#374151;font-size:0.85rem">
-            Go to Settings → Client Engine to upload WhatsApp .txt exports per client.
-          </p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("⚙ Open Settings → Client Engine", type="primary"):
-            st.session_state.page = "settings"
-            st.rerun()
-        return
-
-    # ── Client list + selector ────────────────────────────────────
-    clients = list(dict.fromkeys(c["client"] for c in chats_all))
-    selected = st.session_state.get("cqa_selected", "") or clients[0]
-    if selected not in clients:
-        selected = clients[0]
-    st.session_state.cqa_selected = selected
-
-    if len(clients) > 1:
-        # Horizontal client selector
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        sel_cols = st.columns(min(len(clients), 6))
-        for ci, cname in enumerate(clients[:6]):
-            with sel_cols[ci]:
-                active = "✦ " if cname == selected else ""
-                if st.button(f"{active}{cname}", key=f"cqa_sel_{ci}",
-                             use_container_width=True, type="secondary"):
-                    st.session_state.cqa_selected = cname
-                    st.rerun()
-    else:
-        st.markdown(
-            f"<div style='font-size:1rem;font-weight:700;color:#A5B4FC;margin:12px 0 4px'>"
-            f"🏢 {selected}</div>",
-            unsafe_allow_html=True,
-        )
-
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-
-    # ── Get data for selected client ──────────────────────────────
-    client_chats = [c for c in chats_all if c["client"] == selected]
-    qas = client_qas.get(selected, [])
-    n_qas    = len(qas)
-    n_cats   = len(set(q["category"] for q in qas))
-    n_edited = len([q for q in qas if q.get("edited")])
-    last_gen = qas[0].get("generated_at", "") if qas else ""
-    last_gen_label = ts_label(last_gen) if last_gen else "Never"
-
-    # ── Stats row ─────────────────────────────────────────────────
-    sc1, sc2, sc3, sc4, sc5 = st.columns(5)
-    with sc1:
-        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{n_qas}</div>'
-                    f'<div class="cqa-stat-lbl">Q&amp;As Generated</div></div>',
-                    unsafe_allow_html=True)
-    with sc2:
-        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{n_cats}</div>'
-                    f'<div class="cqa-stat-lbl">Categories</div></div>',
-                    unsafe_allow_html=True)
-    with sc3:
-        total_msgs = sum(c.get("meta", {}).get("total", 0) for c in client_chats)
-        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{total_msgs:,}</div>'
-                    f'<div class="cqa-stat-lbl">Source Messages</div></div>',
-                    unsafe_allow_html=True)
-    with sc4:
-        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val">{n_edited}</div>'
-                    f'<div class="cqa-stat-lbl">Edited by You</div></div>',
-                    unsafe_allow_html=True)
-    with sc5:
-        st.markdown(f'<div class="cqa-stat-card"><div class="cqa-stat-val" '
-                    f'style="font-size:0.95rem">{last_gen_label}</div>'
-                    f'<div class="cqa-stat-lbl">Last Generated</div></div>',
-                    unsafe_allow_html=True)
-
-    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-    # ── Action buttons ─────────────────────────────────────────────
-    ba1, ba2, ba3, ba4 = st.columns([2.5, 1.5, 1.5, 1.5])
-    with ba1:
-        gen_label = "✨ Generate Q&As" if not qas else "🔄 Regenerate Q&As"
-        gen_btn = st.button(gen_label, key="cqa_gen_btn", type="primary",
-                            use_container_width=True)
-    with ba2:
-        # Export Q&A as JSON
-        if qas:
-            st.download_button(
-                "⬇️ Export JSON", use_container_width=True,
-                data=json.dumps(qas, indent=2, ensure_ascii=False),
-                file_name=f"{selected}_qa.json", mime="application/json",
-                key="cqa_export_json",
-            )
-    with ba3:
-        if qas:
-            # Export as readable TXT
-            lines = []
-            for cat in sorted(set(q["category"] for q in qas)):
-                lines += [f"\n{'='*52}", f"  {cat.upper()}", f"{'='*52}\n"]
-                for idx, q in enumerate([x for x in qas if x["category"] == cat], 1):
-                    lines += [f"Q{idx}. {q['question']}", f"A:  {q['answer']}\n"]
-            st.download_button(
-                "⬇️ Export TXT", use_container_width=True,
-                data="\n".join(lines),
-                file_name=f"{selected}_qa.txt", mime="text/plain",
-                key="cqa_export_txt",
-            )
-    with ba4:
-        if qas and st.button("🗑️ Clear Q&As", key="cqa_clear_btn",
-                             use_container_width=True, type="secondary"):
-            cqas = st.session_state.get("kb_client_qas", {})
-            cqas.pop(selected, None)
-            st.session_state.kb_client_qas = cqas
-            save_kb(); st.rerun()
-
-    # ── Generate handler ──────────────────────────────────────────
-    if gen_btn:
-        prog_ph   = st.empty()
-        status_ph = st.empty()
-        prog_ph.progress(0.05)
-        status_ph.markdown(
-            "<span style='color:#A78BFA;font-size:0.85rem'>"
-            f"🤖 Generating Q&As for {selected}…</span>",
-            unsafe_allow_html=True,
-        )
-        try:
-            def _prog(pct, lbl):
-                prog_ph.progress(pct)
-                status_ph.markdown(
-                    f"<span style='color:#A78BFA;font-size:0.85rem'>{lbl}</span>",
-                    unsafe_allow_html=True,
-                )
-            new_qas = _generate_client_qas(selected, client_chats, _prog)
-            cqas = st.session_state.get("kb_client_qas", {})
-            cqas[selected] = new_qas
-            st.session_state.kb_client_qas = cqas
-            save_kb()
-            prog_ph.empty()
-            status_ph.success(
-                f"✅ {len(new_qas)} Q&As generated for {selected} across "
-                f"{len(set(q['category'] for q in new_qas))} categories."
-            )
-            st.rerun()
-        except Exception as e:
-            prog_ph.empty()
-            status_ph.error(f"Error: {e}")
-
-    # ── Q&A display ───────────────────────────────────────────────
-    if not qas:
-        st.markdown("""
-        <div class="no-cqa" style="padding:40px 20px">
-          <div style="font-size:2.5rem;margin-bottom:12px">💬</div>
-          <h3>No Q&As yet for this client</h3>
-          <p style="font-size:0.83rem;color:#374151">
-            Click "Generate Q&amp;As" above to extract support Q&amp;As from the uploaded chats.
-          </p>
-        </div>
-        """, unsafe_allow_html=True)
-        return
-
-    # ── Search + filter ───────────────────────────────────────────
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    sf1, sf2 = st.columns([3, 1])
-    with sf1:
-        search_q = st.text_input(
-            "search", placeholder="🔍  Search questions and answers…",
-            label_visibility="collapsed", key="cqa_search",
-        )
-    with sf2:
-        cats_available = ["All categories"] + sorted(set(q["category"] for q in qas))
-        cat_filter = st.selectbox(
-            "category", cats_available,
-            label_visibility="collapsed", key="cqa_cat_filter",
-        )
-
-    slc = search_q.lower().strip() if search_q else ""
-
-    # Apply filters
-    filtered = qas
-    if cat_filter and cat_filter != "All categories":
-        filtered = [q for q in filtered if q["category"] == cat_filter]
-    if slc:
-        filtered = [
-            q for q in filtered
-            if slc in q["question"].lower() or slc in q["answer"].lower()
-        ]
-
-    st.markdown(
-        f"<div style='font-size:0.78rem;color:#374151;margin:8px 0 16px'>"
-        f"Showing <b style='color:#818CF8'>{len(filtered)}</b> of {n_qas} Q&amp;As</div>",
-        unsafe_allow_html=True,
-    )
-
-    # ── Per-category groups ───────────────────────────────────────
-    cats_in_view = list(dict.fromkeys(q["category"] for q in filtered))
-    edit_id = st.session_state.get("cqa_edit_id", "")
-
-    for ccat_i, cat in enumerate(cats_in_view):
-        cat_items = [q for q in filtered if q["category"] == cat]
-        icon = _CAT_ICONS.get(cat, "📌")
-
-        with st.expander(
-            f"{icon}  {cat}  ·  {len(cat_items)} Q&As" + "\u200b" * ccat_i,
-            expanded=(len(cats_in_view) == 1 or ccat_i == 0),
-        ):
-            for qi, qa in enumerate(cat_items):
-                qa_id = qa["id"]
-                is_editing = (edit_id == qa_id)
-
-                edited_badge = (
-                    '<span class="cqa-edited-badge">✎ edited</span>'
-                    if qa.get("edited") else ""
-                )
-
-                st.markdown(
-                    f'<div class="cqa-card">'
-                    f'<div class="cqa-q">Q: {qa["question"]}</div>'
-                    + (f'<div class="cqa-a">A: {qa["answer"]}</div>' if not is_editing else "")
-                    + f'<div class="cqa-meta">'
-                    f'<span class="cqa-cat-badge">{cat}</span>'
-                    + edited_badge
-                    + f'<span style="margin-left:8px;color:#1F2937">'
-                    f'📁 {qa.get("source_file","")}</span>'
-                    f'</div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-                if is_editing:
-                    new_ans = st.text_area(
-                        "Edit answer", value=qa["answer"],
-                        key=f"cqa_edit_area_{qa_id}", height=120,
-                        label_visibility="collapsed",
-                    )
-                    ec1, ec2 = st.columns([1, 1])
-                    with ec1:
-                        if st.button("✅ Save", key=f"cqa_save_{qa_id}", type="primary",
-                                     use_container_width=True):
-                            cqas = st.session_state.get("kb_client_qas", {})
-                            for item in cqas.get(selected, []):
-                                if item["id"] == qa_id:
-                                    item["answer"] = new_ans
-                                    item["edited"] = True
-                                    break
-                            st.session_state.kb_client_qas = cqas
-                            st.session_state.cqa_edit_id = ""
-                            save_kb(); st.rerun()
-                    with ec2:
-                        if st.button("✕ Cancel", key=f"cqa_cancel_{qa_id}",
-                                     use_container_width=True):
-                            st.session_state.cqa_edit_id = ""
-                            st.rerun()
-                else:
-                    eb1, eb2 = st.columns([1, 1])
-                    with eb1:
-                        if st.button("✎ Edit answer", key=f"cqa_edit_{qi}_{ccat_i}",
-                                     use_container_width=True):
-                            st.session_state.cqa_edit_id = qa_id
-                            st.rerun()
-                    with eb2:
-                        if st.button("🗑 Delete", key=f"cqa_del_{qi}_{ccat_i}",
-                                     use_container_width=True, type="secondary"):
-                            cqas = st.session_state.get("kb_client_qas", {})
-                            cqas[selected] = [x for x in cqas.get(selected, [])
-                                              if x["id"] != qa_id]
-                            st.session_state.kb_client_qas = cqas
-                            save_kb(); st.rerun()
-
-
-def _render_mini_chat():
-    """Inline chat panel rendered as a side column on the FAQ page."""
-    # ── Panel header
-    st.markdown("""
-    <div class="chat-panel-wrap">
-    <div class="chat-panel-header">
-      <div class="chat-panel-title">
-        <span class="live-dot-sm"></span>
-        <div>
-          AI Chat
-          <div class="sub">Animesh · Powered by Claude</div>
-        </div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Close button
-    if st.button("✕ Close", key="close_chat_panel", type="secondary"):
-        st.session_state.chat_open = False
-        st.session_state.quick_q   = ""
-        st.rerun()
-
-    # ── Messages feed
-    history = st.session_state.get("chat_history", [])
-    msgs_html = ""
-    for msg in history[-20:]:
-        content = msg["content"]
-        if msg["role"] == "user":
-            safe = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
-            msgs_html += f'<div class="mini-msg-user"><span>{safe}</span></div>'
-        else:
-            msgs_html += (
-                f'<div class="mini-msg-ai">'
-                f'<div class="av">AI</div>'
-                f'<div class="bubble">{content}</div>'
-                f'</div>'
-            )
-
-    if msgs_html:
-        st.markdown(
-            f'<div class="chat-panel-msgs">{msgs_html}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown("""
-        <div class="chat-panel-msgs">
-          <div class="mini-chat-empty">
-            <div class="icon">✦</div>
-            <div class="text">
-              Hi, I'm Animesh.<br>Ask me anything about Convin Sense.
-            </div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ── Streaming placeholder (visible while generating)
-    stream_ph = st.empty()
-
-    # ── Input — st.chat_input handles Enter natively, no button needed
-    user_input = st.chat_input("Ask a question…", key="mini_chat_input")
-
-    # Handle quick_q (suggestion chips)
-    if not user_input and st.session_state.get("quick_q"):
-        user_input = st.session_state.quick_q
-        st.session_state.quick_q = ""
-
-    if user_input and user_input.strip():
-        active = user_input.strip()
-        ts_now = datetime.now().strftime("%H:%M")
-        st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts_now})
-        answer, sources = ask_claude_stream(active, stream_ph)
-        st.session_state.chat_history.append(
-            {"role": "assistant", "content": answer, "ts": ts_now, "sources": sources}
-        )
-        st.session_state["_mini_last"] = active
-        st.rerun()
-
-    if st.button("🗑 Clear chat", key="mini_clear_chat", type="secondary", use_container_width=True):
-        st.session_state.chat_history = []
-        st.session_state["_mini_last"] = ""
-        st.rerun()
-
-
-def _render_chat_float():
-    """Floating chat: FAB → full sidebar ↔ minimized bar.
-    3 states: closed (FAB) | open (panel) | minimized (bar at bottom-right)
-    """
-    chat_open = st.session_state.get("chat_open", False)
-    chat_min  = st.session_state.get("chat_minimized", False)
-
-    st.markdown("""<style>
-@keyframes fab-pulse{
-  0%,100%{box-shadow:0 6px 32px rgba(139,92,246,.75),0 0 0 0 rgba(236,72,153,.35);}
-  55%{box-shadow:0 8px 44px rgba(139,92,246,1),0 0 0 14px rgba(236,72,153,0);}
-}
-@keyframes cf-slide-in{from{transform:translateX(102%);opacity:0}to{transform:translateX(0);opacity:1}}
-@keyframes cf-min-up{from{transform:translateY(110%)}to{transform:translateY(0)}}
-
-/* ── FAB ── */
-.st-key-cf_fab_wrap{
-    position:fixed!important;bottom:28px!important;right:24px!important;
-    width:160px!important;z-index:999999!important;
-    background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;
-}
-.st-key-cf_fab_wrap>div{padding:0!important;gap:0!important;}
-.st-key-cf_fab_wrap .stButton>button{
-    width:160px!important;height:50px!important;border-radius:28px!important;
-    font-size:.96rem!important;font-weight:700!important;letter-spacing:.3px!important;
-    padding:0 20px!important;
-    background:linear-gradient(135deg,#7C3AED 0%,#6366F1 45%,#EC4899 100%)!important;
-    border:none!important;color:#fff!important;
-    box-shadow:0 6px 28px rgba(139,92,246,.8),0 2px 8px rgba(236,72,153,.45)!important;
-    animation:fab-pulse 2.8s ease-in-out infinite!important;
-    transition:transform .18s cubic-bezier(.34,1.56,.64,1),box-shadow .18s!important;
-}
-.st-key-cf_fab_wrap .stButton>button:hover{
-    transform:scale(1.06) translateY(-2px)!important;
-    box-shadow:0 10px 40px rgba(139,92,246,1),0 4px 16px rgba(236,72,153,.65)!important;
-}
-
-/* ── Minimized bar ── */
-.st-key-cf_min_wrap{
-    position:fixed!important;bottom:0!important;right:28px!important;
-    width:240px!important;z-index:999997!important;
-    background:#0E1120!important;
-    border:1px solid rgba(99,102,241,.22)!important;border-bottom:none!important;
-    border-radius:12px 12px 0 0!important;
-    box-shadow:-2px -4px 24px rgba(0,0,0,.5)!important;
-    animation:cf-min-up .2s cubic-bezier(.4,0,.2,1) forwards!important;
-    padding:0!important;overflow:hidden!important;
-}
-.st-key-cf_min_wrap>div{padding:0!important;gap:0!important;}
-.st-key-cf_min_wrap .stButton>button{
-    height:30px!important;background:transparent!important;
-    border:none!important;color:#6B7280!important;font-size:.73rem!important;
-    padding:0 10px!important;border-radius:0!important;
-    transition:background .12s,color .12s!important;
-}
-.st-key-cf_min_wrap .stButton>button:hover{background:rgba(99,102,241,.1)!important;color:#C4B5FD!important;}
-
-/* ── Panel shell ── */
-.st-key-cf_panel_wrap{
-    position:fixed!important;top:0!important;right:0!important;
-    width:390px!important;height:100dvh!important;z-index:999998!important;
-    background:#0B0D1C!important;
-    border-left:1px solid rgba(99,102,241,.13)!important;
-    box-shadow:-24px 0 80px rgba(0,0,0,.88)!important;
-    animation:cf-slide-in .24s cubic-bezier(.4,0,.2,1) forwards!important;
-    overflow:hidden!important;padding:0!important;
-    display:flex!important;flex-direction:column!important;
-}
-.st-key-cf_panel_wrap>div{padding:0!important;gap:0!important;height:100%!important;display:flex!important;flex-direction:column!important;}
-
-/* Header action buttons */
-.st-key-cf_hdr .stButton>button,
-.st-key-cf_panel_wrap .cf-hdr .stButton>button{
-    height:26px!important;font-size:.7rem!important;font-weight:500!important;
-    padding:0 10px!important;border-radius:7px!important;
-    background:rgba(255,255,255,.04)!important;
-    border:1px solid rgba(255,255,255,.07)!important;
-    color:#9CA3AF!important;
-    transition:all .15s!important;
-}
-.st-key-cf_hdr [data-testid="column"]:first-child .stButton>button:hover,
-.st-key-cf_panel_wrap .cf-hdr [data-testid="column"]:first-child .stButton>button:hover{
-    background:rgba(99,102,241,.14)!important;color:#C4B5FD!important;border-color:rgba(99,102,241,.28)!important;
-}
-.st-key-cf_hdr [data-testid="column"]:nth-child(2) .stButton>button:hover,
-.st-key-cf_panel_wrap .cf-hdr [data-testid="column"]:nth-child(2) .stButton>button:hover{
-    background:rgba(239,68,68,.1)!important;color:#FCA5A5!important;border-color:rgba(239,68,68,.2)!important;
-}
-
-/* Input form */
-.st-key-cf_panel_wrap [data-testid="stForm"]{
-    border:none!important;background:transparent!important;padding:0!important;
-    flex-shrink:0!important;
-}
-.st-key-cf_panel_wrap [data-testid="stForm"]>div{
-    border-top:1px solid rgba(99,102,241,.1)!important;
-    padding:10px 14px 14px!important;background:rgba(7,9,20,.7)!important;
-}
-.st-key-cf_panel_wrap .stTextInput>div>div>input{
-    background:rgba(18,22,42,.95)!important;
-    border:1.5px solid rgba(99,102,241,.16)!important;
-    color:#E5E7EB!important;border-radius:14px!important;
-    font-size:.84rem!important;padding:10px 14px!important;
-    transition:border-color .2s,box-shadow .2s!important;
-}
-.st-key-cf_panel_wrap .stTextInput>div>div>input:focus{
-    border-color:rgba(99,102,241,.48)!important;
-    box-shadow:0 0 0 3px rgba(99,102,241,.09)!important;outline:none!important;
-}
-.st-key-cf_panel_wrap .stTextInput>div>div>input::placeholder{color:#374151!important;}
-/* Send button */
-.st-key-cf_panel_wrap [data-testid="stFormSubmitButton"]>button{
-    height:42px!important;padding:0 14px!important;border-radius:14px!important;
-    background:linear-gradient(135deg,#7C3AED,#6366F1)!important;
-    border:none!important;font-size:.95rem!important;font-weight:700!important;color:#fff!important;
-    box-shadow:0 3px 14px rgba(99,102,241,.42)!important;
-    transition:opacity .15s,transform .15s!important;
-}
-.st-key-cf_panel_wrap [data-testid="stFormSubmitButton"]>button:hover{
-    opacity:.88!important;transform:scale(1.05)!important;
-}
-
-/* Clear button */
-.cf-clear-wrap .stButton>button{
-    height:28px!important;font-size:.71rem!important;
-    background:transparent!important;border:1px solid rgba(255,255,255,.06)!important;
-    color:#4B5563!important;border-radius:8px!important;
-    transition:all .15s!important;
-}
-.cf-clear-wrap .stButton>button:hover{
-    background:rgba(239,68,68,.08)!important;color:#FCA5A5!important;border-color:rgba(239,68,68,.18)!important;
-}
-
-/* Text visibility */
-.st-key-cf_panel_wrap p,
-.st-key-cf_panel_wrap li,
-.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] p,
-.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] li,
-.st-key-cf_panel_wrap [data-testid="stEmpty"] p { color:#E5E7EB!important; }
-.st-key-cf_panel_wrap [data-testid="stMarkdownContainer"] strong { color:#C4B5FD!important; }
-</style>""", unsafe_allow_html=True)
-
-    # ── State: FAB only ───────────────────────────────────────────
-    if not chat_open:
-        with st.container(key="cf_fab_wrap"):
-            if st.button("💬  Ask AI", key="cf_fab_open"):
-                st.session_state.chat_open      = True
-                st.session_state.chat_minimized = False
-                st.session_state.quick_q        = ""
-                st.rerun()
-        return
-
-    # ── State: minimized bar ──────────────────────────────────────
-    if chat_min:
-        history = st.session_state.get("chat_history", [])
-        badge = ""
-        if history:
-            n = len(history)
-            badge = (f" <span style='background:rgba(139,92,246,.25);color:#A78BFA;"
-                     f"font-size:.6rem;padding:1px 7px;border-radius:10px;vertical-align:middle'>{n}</span>")
-        with st.container(key="cf_min_wrap"):
-            st.markdown(f"""
-<div style="display:flex;align-items:center;gap:10px;padding:0 14px;height:42px">
-  <div style="width:8px;height:8px;border-radius:50%;background:#10B981;
-  box-shadow:0 0 7px #10B981;flex-shrink:0;animation:livepulse 2.5s ease-in-out infinite"></div>
-  <span style="font-size:.82rem;font-weight:700;color:#C4B5FD;flex:1;
-  letter-spacing:-.01em">AI Chat{badge}</span>
-</div>""", unsafe_allow_html=True)
-            mc1, mc2 = st.columns([1, 1])
-            with mc1:
-                if st.button("⬆ Expand", key="cf_max_btn", use_container_width=True):
-                    st.session_state.chat_minimized = False
-                    st.rerun()
-            with mc2:
-                if st.button("✕ Close", key="cf_min_close", use_container_width=True):
-                    st.session_state.chat_open      = False
-                    st.session_state.chat_minimized = False
-                    st.rerun()
-        return
-
-    # ── State: full panel ─────────────────────────────────────────
-    with st.container(key="cf_panel_wrap"):
-
-        # ── Header ────────────────────────────────────────────────
-        st.markdown("""
-<div style="padding:14px 16px 10px;flex-shrink:0;
-background:linear-gradient(135deg,rgba(124,58,237,.1) 0%,rgba(99,102,241,.04) 100%);
-border-bottom:1px solid rgba(99,102,241,.11)">
-  <div style="display:flex;align-items:center;gap:11px">
-    <div style="width:36px;height:36px;border-radius:11px;flex-shrink:0;
-    background:linear-gradient(135deg,#7C3AED,#6366F1);
-    display:flex;align-items:center;justify-content:center;font-size:1.05rem;
-    box-shadow:0 3px 12px rgba(99,102,241,.45)">🤖</div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:.9rem;font-weight:700;color:#F3F4F6;line-height:1.2;
-      letter-spacing:-.01em">Convin AI</div>
-      <div style="font-size:.63rem;color:#6B7280;margin-top:2px;display:flex;align-items:center;gap:5px">
-        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;
-        background:#10B981;box-shadow:0 0 5px rgba(16,185,129,.6)"></span>
-        Support Agent · Claude
-      </div>
-    </div>
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        with st.container(key="cf_hdr"):
-            hc1, hc2, _hc3 = st.columns([1, 1, 2])
-            with hc1:
-                if st.button("⊖ Minimize", key="cf_minimize_btn", use_container_width=True):
-                    st.session_state.chat_minimized = True
-                    st.rerun()
-            with hc2:
-                if st.button("✕ Close", key="cf_panel_close", use_container_width=True):
-                    st.session_state.chat_open      = False
-                    st.session_state.chat_minimized = False
-                    st.rerun()
-
-        # ── Messages ──────────────────────────────────────────────
-        history = st.session_state.get("chat_history", [])
-
-        def _md(text: str) -> str:
-            """Minimal markdown → HTML for AI bubbles."""
-            text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-            text = re.sub(r"\*(.+?)\*",   r"<em>\1</em>",           text)
-            text = re.sub(r"`(.+?)`",     r"<code>\1</code>",       text)
-            lines, in_ol, in_ul, out = text.split("\n"), False, False, []
-            for ln in lines:
-                m = re.match(r"^(\d+)\.\s(.+)$", ln)
-                b = re.match(r"^[-•]\s(.+)$", ln)
-                if m:
-                    if not in_ol: out.append("<ol>"); in_ol = True
-                    if in_ul:     out.append("</ul>"); in_ul = False
-                    out.append(f"<li>{m.group(2)}</li>")
-                elif b:
-                    if not in_ul: out.append("<ul>"); in_ul = True
-                    if in_ol:     out.append("</ol>"); in_ol = False
-                    out.append(f"<li>{b.group(1)}</li>")
-                else:
-                    if in_ol: out.append("</ol>"); in_ol = False
-                    if in_ul: out.append("</ul>"); in_ul = False
-                    out.append(ln if not ln.strip() else ln + "<br>")
-            if in_ol: out.append("</ol>")
-            if in_ul: out.append("</ul>")
-            return "".join(out)
-
-        if history:
-            msgs_html = ""
-            for msg in history[-24:]:
-                c  = msg["content"]
-                ts = msg.get("ts", "")
-                if msg["role"] == "user":
-                    safe = (c.replace("&","&amp;").replace("<","&lt;")
-                              .replace(">","&gt;").replace("\n","<br>"))
-                    msgs_html += (f'<div class="cf-user-bubble">{safe}'
-                                  f'<div class="cf-ts">{ts}</div></div>')
-                else:
-                    msgs_html += (f'<div class="cf-ai-bubble">{_md(c)}'
-                                  f'<div class="cf-ts cf-ai-ts">{ts}</div></div>')
-            st.markdown(
-                f'<div class="cf-msgs" id="cf-msgs-box">{msgs_html}'
-                f'<div id="cf-bottom"></div></div>'
-                f'<script>(function(){{var e=document.getElementById("cf-msgs-box");'
-                f'if(e)e.scrollTop=e.scrollHeight;}})();</script>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.markdown("""
-<div class="cf-msgs">
-  <div class="cf-empty">
-    <span class="cf-empty-icon">🤖</span>
-    <div class="cf-empty-title">Hi! I'm Convin AI</div>
-    <div class="cf-empty-sub">Ask me anything about Convin Sense — bot config, connectivity, handoffs, pricing, and more.</div>
-    <div style="margin-top:16px;line-height:2.2">
-      <span class="cf-suggestion">What is Convin Sense?</span>
-      <span class="cf-suggestion">Typical connectivity rate?</span>
-      <span class="cf-suggestion">How does handoff work?</span>
-    </div>
-  </div>
-</div>""", unsafe_allow_html=True)
-
-        stream_ph = st.empty()
-
-        # ── Scroll-to-bottom button ───────────────────────────────
-        if history:
-            _sb_l, _sb_m, _sb_r = st.columns([2, 2, 2])
-            with _sb_m:
-                st.markdown('<div class="cf-scroll-btn">', unsafe_allow_html=True)
-                if st.button("↓ Latest", key="cf_scroll_bottom", use_container_width=True):
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-
-        # Pre-fill from quick_q
-        if st.session_state.get("quick_q"):
-            st.session_state["cf_text_input"] = st.session_state.quick_q
-            st.session_state.quick_q = ""
-
-        # ── Input form ────────────────────────────────────────────
-        with st.form("cf_chat_form", clear_on_submit=True, border=False):
-            in_col, send_col = st.columns([5, 1])
-            with in_col:
-                user_input = st.text_input(
-                    "cf_msg", placeholder="Type your question…",
-                    label_visibility="collapsed", key="cf_text_input",
-                )
-            with send_col:
-                send_btn = st.form_submit_button("➤")
-
-        if send_btn:
-            active = (user_input or "").strip()
-            if active:
-                ts = datetime.now().strftime("%H:%M")
-                st.session_state.chat_history.append({"role": "user", "content": active, "ts": ts})
-                answer, sources = ask_claude_stream(active, stream_ph)
-                st.session_state.chat_history.append({"role": "assistant", "content": answer,
-                                                      "ts": ts, "sources": sources})
-                stream_ph.empty()
-                st.rerun()
-
-        # ── Clear button ──────────────────────────────────────────
-        if history:
-            st.markdown('<div class="cf-clear-wrap" style="padding:2px 14px 12px">', unsafe_allow_html=True)
-            if st.button("🗑  Clear chat", key="cf_clear", use_container_width=True):
-                st.session_state.chat_history = []
-                st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-
-def render_faq():
-    render_topnav(show_settings_btn=False, show_back_btn=False, show_chat_btn=True, show_client_btn=True)
-
-    faqs  = st.session_state.get("kb_faqs", [])
-    total = total_sources()
-
-    # ── Partition Q&As by source ──────────────────────────────────
-    wa_specific  = [f for f in faqs if f["category"].startswith("WhatsApp:")]
-    wa_generic   = [f for f in faqs if f["category"].startswith("Client Learnings:")]
-    generic_faqs = [f for f in faqs if not f["category"].startswith("WhatsApp:")
-                    and not f["category"].startswith("Client Learnings:")]
-    faq_curated: list[dict] = []
-    for cat in _CONVIN_FAQ_CATS:
-        bucket = [f for f in faqs if f["category"] == cat]
-        faq_curated.extend(bucket[:_FAQ_CAP_PER_CAT])
-
-    SOURCE_BUCKETS = {
-        "FAQ":        faq_curated,
-        "Q&A":        generic_faqs,
-        "Use Cases":  wa_specific,
-        "More Q&A":   wa_generic,
-        "All":        faqs,
-    }
-    SOURCE_COUNTS = {k: len(v) for k, v in SOURCE_BUCKETS.items()}
-    all_cats_full = sorted(set(f["category"] for f in faqs))
-
-    # ── Hero ──────────────────────────────────────────────────────
-    n_cats = len(set(f["category"] for f in faqs))
-    st.markdown(
-        f'<div class="lp-hero"><div class="lp-hero-inner">'
-        f'<div class="lp-eyebrow"><span class="dot"></span>Convin Sense &nbsp;&middot;&nbsp; Knowledge Base</div>'
-        f'<div class="lp-title">Single-Page <span class="grad">Knowledge Base</span></div>'
-        f'<div class="lp-sub">Search, filter, and explore every Q&amp;A — FAQs, pilot use cases, and client learnings — all in one place.</div>'
-        f'<div class="lp-pills">'
-        f'<span class="lp-pill lp-pill-violet">&#10022; {len(faqs):,} Q&amp;As</span>'
-        f'<span class="lp-pill lp-pill-pink">&#128193; {n_cats} Categories</span>'
-        f'<span class="lp-pill lp-pill-cyan">&#9889; Instant Search</span>'
-        f'<span class="lp-pill lp-pill-green">&#10003; {total} KB Sources</span>'
-        f'<span class="lp-pill lp-pill-amber">&#128172; Chat Ready</span>'
-        f'</div>'
-        f'</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    # ── Stat cards ────────────────────────────────────────────────
-    cards_all = ["FAQ", "Q&A", "Use Cases", "More Q&A", "All"]
-
-    def _stat_card(k):
-        return (
-            f'<div style="background:#1a1d2e;border:1px solid #2d3158;border-radius:10px;'
-            f'padding:12px 18px;flex:1;min-width:100px;text-align:center">'
-            f'<div style="font-size:1.4rem;font-weight:800;color:#A78BFA">{SOURCE_COUNTS[k]:,}</div>'
-            f'<div style="font-size:0.72rem;color:#9CA3AF;margin-top:3px">{k}</div>'
-            f'</div>'
-        )
-
-    st.markdown(
-        '<div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 12px">'
-        + "".join(_stat_card(k) for k in cards_all)
-        + "</div>",
-        unsafe_allow_html=True,
-    )
-
-    # ── Support Q&A One-Pager button ──────────────────────────────
-    _, _mid, _ = st.columns([3, 2, 3])
-    with _mid:
-        if st.button("📋 Support Q&A →", key="faq_sqna_btn", use_container_width=True):
-            st.session_state.page = "support_qna"
-            st.rerun()
-    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-
-    # ── Search + Filter row ───────────────────────────────────────
-    sc, fc, cc = st.columns([4, 2, 2])
-    with sc:
-        search = st.text_input(
-            "search", placeholder="🔍  Search questions and answers…",
-            label_visibility="collapsed", key="kb_global_search",
-        )
-    with fc:
-        src_choice = st.selectbox(
-            "Source", list(SOURCE_BUCKETS.keys()),
-            label_visibility="collapsed", key="kb_src_select",
-        )
-    with cc:
-        short_cats = ["All Categories"] + [
-            c.replace("WhatsApp: ", "").replace("Client Learnings: ", "")
-            for c in all_cats_full
-        ]
-        cat_choice = st.selectbox(
-            "Category", short_cats,
-            label_visibility="collapsed", key="kb_cat_select",
-        )
-
-    # ── Build filtered subset ─────────────────────────────────────
-    active = list(SOURCE_BUCKETS[src_choice])
-
-    if cat_choice != "All Categories":
-        active = [
-            f for f in active
-            if f["category"].replace("WhatsApp: ", "").replace("Client Learnings: ", "") == cat_choice
-        ]
-
-    slc = search.lower().strip() if search else ""
-    if slc:
-        active = [
-            f for f in active
-            if slc in f.get("question", "").lower() or slc in f.get("answer", "").lower()
-        ]
-
-    # ── Result count banner ───────────────────────────────────────
-    if search or cat_choice != "All Categories":
-        st.markdown(
-            f'<div style="font-size:0.82rem;color:#A78BFA;margin:4px 0 12px">'
-            f'&#128269; <b>{len(active):,}</b> results'
-            + (f' for &ldquo;{search}&rdquo;' if search else "")
-            + (f' in <b>{cat_choice}</b>' if cat_choice != "All Categories" else "")
-            + f' &nbsp;·&nbsp; <b>{src_choice}</b></div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Q&A list ──────────────────────────────────────────────────
-    _render_category_dashboard(
-        active, "kb",
-        no_content_msg="No Q&As match your search or filter.",
-    )
-
-    # ── Process Flow (collapsible) ────────────────────────────────
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-    with st.expander("🗺️  Process Flow — End-to-End Campaign Flowchart", expanded=False):
-        _render_flowchart_tab()
-
-    # ── Action bar ────────────────────────────────────────────────
-    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-    ab1, ab2 = st.columns([3, 2])
-    with ab1:
-        gen_btn = st.button(
-            "✨ Generate Answers" if not faqs else "🔄 Regenerate Answers",
-            type="primary", use_container_width=True, disabled=(total == 0),
-        )
-    with ab2:
-        if faqs and st.button("🗑️ Clear All", use_container_width=True):
-            st.session_state.kb_faqs = []
-            save_kb(); st.rerun()
-    if total == 0:
-        st.info("Add documents or links from Settings first, then click Generate.")
-
-    if gen_btn:
-        prog_ph   = st.empty()
-        status_ph = st.empty()
-        docs_n  = len(st.session_state.get("kb_documents", []))
-        links_n = len(st.session_state.get("kb_links", [])) + len(st.session_state.get("kb_crawled", []))
-        wa_n    = len(st.session_state.get("kb_whatsapp", []))
-        passes  = sum(1 for x in [docs_n, links_n, wa_n] if x > 0)
-        status_ph.markdown(
-            f"<span style='color:#A78BFA;font-size:0.85rem'>"
-            f"🤖 Running {passes} extraction pass(es) — building your Knowledge Base…</span>",
-            unsafe_allow_html=True,
-        )
-        prog_ph.progress(0.05)
-
-        def _progress(pct, label):
-            prog_ph.progress(pct)
-            status_ph.markdown(
-                f"<span style='color:#A78BFA;font-size:0.85rem'>{label}</span>",
-                unsafe_allow_html=True,
-            )
-
-        try:
-            new_faqs = generate_faqs(progress_cb=_progress)
-            prog_ph.progress(1.0)
-            if new_faqs:
-                st.session_state.kb_faqs = new_faqs
-                save_kb()
-                prog_ph.empty()
-                n_cats2 = len(set(f["category"] for f in new_faqs))
-                status_ph.success(
-                    f"✅ {len(new_faqs)} answers generated across {n_cats2} categories — Knowledge Base updated!"
-                )
-                st.rerun()
+</div>
+""", unsafe_allow_html=True)
+
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.markdown('<div class="chat-messages" id="chat-messages">', unsafe_allow_html=True)
+
+    # Display chat history
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.chat_messages:
+            if msg["role"] == "user":
+                st.markdown(f"""
+                <div class="message user">
+                    <strong>You:</strong> {msg["content"]}
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                prog_ph.empty()
-                status_ph.warning("No answers extracted. Try adding more content.")
-        except Exception as e:
-            prog_ph.empty()
-            status_ph.error(f"Error: {e}")
+                st.markdown(f"""
+                <div class="message assistant">
+                    <strong>Support:</strong> {msg["content"]}
+                </div>
+                """, unsafe_allow_html=True)
 
-    # ── Floating chat widget ──────────────────────────────────────
-    _render_chat_float()
+    st.markdown('</div>', unsafe_allow_html=True)
 
+    # Chat input
+    user_input = st.text_input(
+        "Your message",
+        placeholder="Type your question...",
+        label_visibility="collapsed",
+        key="chat_input"
+    )
 
-# ══════════════════════════════════════════════════════════════════
-#  EXPORT HELPERS
-# ══════════════════════════════════════════════════════════════════
-def export_qnas_csv(qnas: list[dict]) -> str:
-    output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["Category", "Question", "Answer"])
-    writer.writeheader()
-    for qna in qnas:
-        writer.writerow({
-            "Category": qna.get("category", ""),
-            "Question": qna.get("question", ""),
-            "Answer": qna.get("answer", ""),
+    if user_input:
+        # Add user message
+        st.session_state.chat_messages.append({
+            "role": "user",
+            "content": user_input
         })
-    return output.getvalue()
 
-def export_qnas_json(qnas: list[dict]) -> str:
-    return json.dumps(qnas, indent=2)
+        # Get AI response
+        response = get_chat_response(user_input)
+        st.session_state.chat_messages.append({
+            "role": "assistant",
+            "content": response
+        })
 
-def export_qnas_markdown(qnas: list[dict]) -> str:
-    lines = ["# Support Q&A Reference Sheet\n"]
-    categories: dict[str, list] = {}
-    for qna in qnas:
-        cat = qna.get("category", "Uncategorized")
-        categories.setdefault(cat, []).append(qna)
-    for cat in sorted(categories.keys()):
-        lines.append(f"## 📂 {cat}\n")
-        for qna in categories[cat]:
-            lines.append(f"**Q: {qna.get('question', '')}**\n")
-            lines.append(f"A: {qna.get('answer', '')}\n")
-        lines.append("")
-    return "\n".join(lines)
+        # Save to database
+        save_chat_message("user", "user", user_input, st.session_state.session_id)
+        save_chat_message("support", "assistant", response, st.session_state.session_id)
 
+        st.rerun()
 
-# ══════════════════════════════════════════════════════════════════
-#  SUPPORT Q&A ONE-PAGER — component builder
-# ══════════════════════════════════════════════════════════════════
-def _build_sqna_html(faqs: list[dict]) -> str:
-    """Return a self-contained HTML string for embedding via _components.html()."""
-    import html as _html
-
-    # group by category
-    cat_groups: dict[str, list[dict]] = {}
-    for item in faqs:
-        cat = item.get("category", "General")
-        cat_groups.setdefault(cat, []).append(item)
-
-    cat_order = sorted(cat_groups.keys(), key=lambda c: (
-        0 if not c.startswith(("WhatsApp:", "Client Learnings:")) else
-        1 if not c.startswith("Client Learnings:") else 2,
-        -len(cat_groups[c])
-    ))
-
-    def _section(cat):
-        if cat.startswith("WhatsApp:"):      return "whatsapp"
-        if cat.startswith("Client Learnings:"): return "learnings"
-        return "general"
-
-    def _short(cat):
-        return cat.replace("WhatsApp: ", "").replace("Client Learnings: ", "")
-
-    def _cid(cat):
-        return re.sub(r"[^a-z0-9]+", "-", cat.lower()).strip("-")
-
-    def _answer_body(raw: str) -> str:
-        lines = [l.strip() for l in raw.strip().split("\n") if l.strip()]
-        if not lines:
-            return ""
-        step_re = re.compile(r"^\d+[\.\)]\s+(.+)$")
-        bull_re = re.compile(r"^[•\-\*]\s+(.+)$")
-        if len(lines) > 1 and all(step_re.match(l) for l in lines):
-            items = "".join(f"<li>{_html.escape(step_re.match(l).group(1))}</li>" for l in lines)
-            return f"<ol>{items}</ol>"
-        if len(lines) > 1 and all(bull_re.match(l) for l in lines):
-            items = "".join(f"<li>{_html.escape(bull_re.match(l).group(1))}</li>" for l in lines)
-            return f"<ul>{items}</ul>"
-        return "".join(f"<p>{_html.escape(l)}</p>" for l in lines)
-
-    # TOC
-    toc_parts = []
-    prev_sec = None
-    sec_labels = {"general": "Product &amp; General", "whatsapp": "WhatsApp", "learnings": "Client Learnings"}
-    for cat in cat_order:
-        sec = _section(cat)
-        if sec != prev_sec:
-            toc_parts.append(f'<div class="toc-lbl">{sec_labels[sec]}</div>')
-            prev_sec = sec
-        toc_parts.append(
-            f'<a href="#{_cid(cat)}" class="toc-a" data-id="{_cid(cat)}">'
-            f'{_html.escape(_short(cat))}'
-            f'<span class="toc-n">{len(cat_groups[cat])}</span></a>'
-        )
-
-    # Cards
-    card_parts = []
-    badge_map = {
-        "whatsapp": '<span class="badge badge-wa">WhatsApp</span>',
-        "learnings": '<span class="badge badge-cl">Client</span>',
-        "general":   '<span class="badge badge-gn">Product</span>',
-    }
-    for cat in cat_order:
-        cid = _cid(cat)
-        sec = _section(cat)
-        card_parts.append(
-            f'<section id="{cid}" class="cat-sec" data-id="{cid}">'
-            f'<div class="cat-hdr">{badge_map[sec]}'
-            f'<h2 class="cat-ttl">{_html.escape(_short(cat))}</h2>'
-            f'<span class="cat-cnt">{len(cat_groups[cat])}</span></div>'
-            f'<div class="qa-grid">'
-        )
-        for item in cat_groups[cat]:
-            q = item.get("question", "").strip()
-            a = item.get("answer",   "").strip()
-            if not q:
-                continue
-            card_parts.append(
-                f'<div class="qa-card"'
-                f' data-q="{_html.escape(q.lower())}"'
-                f' data-a="{_html.escape(a.lower())}">'
-                f'<div class="qa-q">{_html.escape(q)}</div>'
-                f'<div class="qa-a">{_answer_body(a) or "<p><em>—</em></p>"}</div>'
-                f'</div>'
-            )
-        card_parts.append('</div></section>')
-
-    toc_html   = "\n".join(toc_parts)
-    cards_html = "\n".join(card_parts)
-    n_cats     = len(cat_order)
-    n_faqs     = len(faqs)
-
-    return f"""<!DOCTYPE html><html lang="en"><head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-:root{{
-  --bg:#0B0F1A;--s1:#111827;--s2:#1A2035;
-  --acc:#6366F1;--acl:#818CF8;
-  --t1:#E5E7EB;--t2:#94A3B8;--t3:#475569;
-  --brd:rgba(255,255,255,0.06);--bacc:rgba(99,102,241,0.22);
-  --sw:240px;
-}}
-html{{scroll-behavior:smooth;height:100%}}
-body{{font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;
-  background:var(--bg);color:var(--t1);font-size:13px;line-height:1.6;
-  -webkit-font-smoothing:antialiased;height:100%;overflow:hidden}}
-a{{color:inherit;text-decoration:none}}
-
-/* toolbar */
-.toolbar{{
-  position:fixed;top:0;left:0;right:0;z-index:50;height:48px;
-  background:rgba(11,15,26,0.95);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--brd);
-  display:flex;align-items:center;gap:10px;padding:0 16px;
-}}
-.tb-title{{font-size:.85rem;font-weight:700;white-space:nowrap;color:var(--t1)}}
-.tb-badge{{font-size:.62rem;font-weight:600;padding:2px 8px;border-radius:20px;
-  background:rgba(99,102,241,0.12);border:1px solid var(--bacc);color:var(--acl)}}
-.tb-search{{flex:1;position:relative}}
-.tb-search input{{
-  width:100%;height:32px;padding:0 10px 0 30px;
-  background:var(--s2);border:1px solid var(--brd);border-radius:7px;
-  color:var(--t1);font-size:.8rem;outline:none;
-  transition:border-color .15s
-}}
-.tb-search input:focus{{border-color:var(--acl)}}
-.tb-search input::placeholder{{color:var(--t3)}}
-.tb-search .ico{{position:absolute;left:9px;top:50%;transform:translateY(-50%);
-  color:var(--t3);font-size:13px;pointer-events:none}}
-.tb-stats{{display:flex;gap:8px;white-space:nowrap}}
-.chip{{font-size:.68rem;color:var(--t2);background:var(--s2);
-  border:1px solid var(--brd);padding:3px 9px;border-radius:20px}}
-.chip b{{color:var(--acl)}}
-.dl-btn{{
-  display:flex;align-items:center;gap:5px;height:30px;padding:0 12px;
-  background:linear-gradient(135deg,var(--acc),#8B5CF6);
-  color:#fff;font-size:.75rem;font-weight:600;border:none;border-radius:7px;
-  cursor:pointer;white-space:nowrap;transition:opacity .15s
-}}
-.dl-btn:hover{{opacity:.85}}
-
-/* layout */
-.layout{{display:flex;position:fixed;top:48px;left:0;right:0;bottom:0}}
-
-/* sidebar */
-.sidebar{{
-  width:var(--sw);min-width:var(--sw);height:100%;
-  overflow-y:auto;overflow-x:hidden;
-  background:var(--s1);border-right:1px solid var(--brd);
-  padding:10px 0 24px;
-  scrollbar-width:thin;scrollbar-color:var(--s2) transparent;
-}}
-.sidebar::-webkit-scrollbar{{width:3px}}
-.sidebar::-webkit-scrollbar-thumb{{background:var(--s2);border-radius:3px}}
-.toc-lbl{{font-size:.6rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--t3);padding:12px 14px 3px}}
-.toc-a{{display:flex;align-items:center;justify-content:space-between;
-  padding:5px 14px;font-size:.74rem;color:var(--t2);
-  border-left:2px solid transparent;transition:all .1s;gap:5px}}
-.toc-a:hover{{color:var(--t1);background:var(--s2)}}
-.toc-a.active{{color:var(--acl);border-left-color:var(--acc);
-  background:rgba(99,102,241,0.08);font-weight:500}}
-.toc-n{{font-size:.64rem;color:var(--t3);background:var(--s2);
-  border-radius:10px;padding:1px 5px;flex-shrink:0}}
-
-/* main */
-.main{{flex:1;min-width:0;overflow-y:auto;padding:20px 22px 40px;
-  scrollbar-width:thin;scrollbar-color:var(--s2) transparent}}
-.main::-webkit-scrollbar{{width:5px}}
-.main::-webkit-scrollbar-thumb{{background:var(--s2);border-radius:4px}}
-
-#no-results{{display:none;padding:40px 0;text-align:center;
-  color:var(--t2);font-size:.88rem}}
-
-.cat-sec{{margin-bottom:32px}}
-.cat-sec.hidden{{display:none}}
-.cat-hdr{{display:flex;align-items:center;gap:8px;
-  margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--brd)}}
-.cat-ttl{{font-size:.92rem;font-weight:700;color:var(--t1);flex:1}}
-.cat-cnt{{font-size:.66rem;color:var(--t3);background:var(--s2);
-  padding:2px 7px;border-radius:10px}}
-
-.badge{{font-size:.58rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  padding:2px 6px;border-radius:4px;flex-shrink:0}}
-.badge-wa{{background:rgba(16,185,129,.15);color:#6EE7B7;border:1px solid rgba(16,185,129,.3)}}
-.badge-cl{{background:rgba(236,72,153,.12);color:#F9A8D4;border:1px solid rgba(236,72,153,.25)}}
-.badge-gn{{background:rgba(99,102,241,.12);color:#A78BFA;border:1px solid rgba(99,102,241,.25)}}
-
-.qa-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}}
-.qa-card{{background:var(--s1);border:1px solid var(--brd);border-radius:9px;
-  padding:12px 14px;transition:border-color .12s}}
-.qa-card:hover{{border-color:var(--bacc)}}
-.qa-card.hidden{{display:none}}
-.qa-q{{font-size:.78rem;font-weight:600;color:var(--acl);margin-bottom:7px;line-height:1.4}}
-.qa-a{{font-size:.75rem;color:var(--t2);line-height:1.6}}
-.qa-a p{{margin-bottom:3px}}.qa-a p:last-child{{margin-bottom:0}}
-.qa-a ol,.qa-a ul{{padding-left:16px;margin:0}}
-.qa-a li{{margin-bottom:2px}}
-.qa-a ol li{{list-style:decimal}}.qa-a ul li{{list-style:disc}}
-mark{{background:rgba(124,58,237,.3);border-radius:3px;padding:0 2px;color:#EEF0FA}}
-</style></head><body>
-
-<div class="toolbar">
-  <span class="tb-title">Support Q&amp;A</span>
-  <span class="tb-badge">One-Pager</span>
-  <div class="tb-search">
-    <span class="ico">&#128269;</span>
-    <input type="search" id="srch" placeholder="Search questions and answers…" autocomplete="off">
-  </div>
-  <div class="tb-stats">
-    <div class="chip"><b>{n_faqs:,}</b> Q&amp;As</div>
-    <div class="chip"><b>{n_cats}</b> cats</div>
-  </div>
-  <button class="dl-btn" onclick="dlPage()">&#8595; Download</button>
-</div>
-
-<div class="layout">
-  <aside class="sidebar" id="sb">{toc_html}</aside>
-  <div class="main" id="mn">
-    <div id="no-results">No Q&amp;As match your search.</div>
-    {cards_html}
-  </div>
-</div>
-
-<script>
-(function(){{
-  const srch=document.getElementById('srch');
-  const secs=Array.from(document.querySelectorAll('.cat-sec'));
-  const cards=Array.from(document.querySelectorAll('.qa-card'));
-  const links=Array.from(document.querySelectorAll('.toc-a'));
-  const noRes=document.getElementById('no-results');
-  const mn=document.getElementById('mn');
-
-  function esc(s){{return s.replace(/[.*+?^${{}}()|[\\]\\\\]/g,'\\\\$&')}}
-  function hl(txt,t){{
-    return txt.replace(new RegExp('('+esc(t)+')','gi'),
-      '<mark>$1</mark>');
-  }}
-
-  cards.forEach(c=>{{
-    c.dataset.qo=c.querySelector('.qa-q').innerHTML;
-    c.dataset.ao=c.querySelector('.qa-a').innerHTML;
-  }});
-
-  srch.addEventListener('input',function(){{
-    const t=this.value.toLowerCase().trim();
-    let vis=0;
-    secs.forEach(sec=>{{
-      let sc=0;
-      sec.querySelectorAll('.qa-card').forEach(card=>{{
-        const m=!t||card.dataset.q.includes(t)||card.dataset.a.includes(t);
-        card.classList.toggle('hidden',!m);
-        if(m){{
-          sc++;
-          if(t){{
-            card.querySelector('.qa-q').innerHTML=hl(card.dataset.qo,t);
-            card.querySelector('.qa-a').innerHTML=hl(card.dataset.ao,t);
-          }} else {{
-            card.querySelector('.qa-q').innerHTML=card.dataset.qo;
-            card.querySelector('.qa-a').innerHTML=card.dataset.ao;
-          }}
-        }}
-      }});
-      sec.classList.toggle('hidden',sc===0);
-      if(sc>0) vis++;
-    }});
-    noRes.style.display=vis===0?'block':'none';
-  }});
-
-  const obs=new IntersectionObserver(entries=>{{
-    entries.forEach(e=>{{
-      const lk=document.querySelector('.toc-a[data-id="'+e.target.id+'"]');
-      if(!lk) return;
-      if(e.isIntersecting){{
-        links.forEach(l=>l.classList.remove('active'));
-        lk.classList.add('active');
-        lk.scrollIntoView({{block:'nearest',behavior:'smooth'}});
-      }}
-    }});
-  }},{{root:mn,rootMargin:'-10% 0px -75% 0px'}});
-  secs.forEach(s=>obs.observe(s));
-
-  links.forEach(lk=>lk.addEventListener('click',function(e){{
-    e.preventDefault();
-    const t=document.getElementById(this.dataset.id);
-    if(t) mn.scrollTo({{top:t.offsetTop-10,behavior:'smooth'}});
-  }}));
-}})();
-
-function dlPage(){{
-  const btn=document.querySelector('.dl-btn');
-  btn.textContent='Preparing…';
-  const html='<!DOCTYPE html>\\n'+document.documentElement.outerHTML;
-  const b=new Blob([html],{{type:'text/html;charset=utf-8'}});
-  const u=URL.createObjectURL(b);
-  const a=document.createElement('a');
-  a.href=u;a.download='convin-support-qna.html';
-  document.body.appendChild(a);a.click();
-  document.body.removeChild(a);URL.revokeObjectURL(u);
-  setTimeout(()=>{{btn.innerHTML='&#8595; Download';btn.style.opacity='1';}},1200);
-}}
-</script></body></html>"""
-
-
-# ══════════════════════════════════════════════════════════════════
-#  SUPPORT QUICK REFERENCE PAGE
-# ══════════════════════════════════════════════════════════════════
-def render_support_qna():
-    render_topnav(show_settings_btn=True, show_back_btn=True)
-
-    faqs = st.session_state.get("kb_faqs", [])
-
-    if not faqs:
-        st.markdown("""
-        <div class="no-faq">
-          <div class="no-faq-icon">📋</div>
-          <h3>No Knowledge Base Yet</h3>
-          <p>Go to Settings, add your documents or links, then click "Generate Answers" on the Knowledge Base page.</p>
+# ── VOICE WIDGET ──
+with col2:
+    st.markdown("""
+    <div class="widget-container">
+        <div class="widget-header">
+            <div class="widget-icon" style="background: linear-gradient(135deg, #10B981 0%, #34D399 100%); box-shadow: 0 0 16px rgba(16, 185, 129, 0.3);">📞</div>
+            <div class="widget-title">Voice Call</div>
         </div>
-        """, unsafe_allow_html=True)
-        _render_chat_float()
-        return
+    </div>
+    """, unsafe_allow_html=True)
 
-    _components.html(_build_sqna_html(faqs), height=900, scrolling=False)
+    st.markdown("""
+    <div class="voice-display">
+        <div class="voice-icon-large">📞</div>
+        <div class="voice-status">
+            <strong>Convin Voice Agent</strong><br>
+            Premium voice support available
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
+    col_phone, col_key = st.columns([1, 1])
+
+    with col_phone:
+        phone_number = st.text_input(
+            "Phone Number",
+            placeholder="+1 (555) 000-0000",
+            key="phone_input"
+        )
+
+    with col_key:
+        voice_api_key = st.text_input(
+            "Voice Agent API Key",
+            placeholder="Enter your API key",
+            type="password",
+            key="voice_key_input"
+        )
+
+    col_start, col_end = st.columns([1, 1])
+
+    with col_start:
+        if st.button("Start Call", key="start_call", use_container_width=True):
+            if phone_number and voice_api_key:
+                st.session_state.voice_call_active = True
+                call_result = initiate_voice_call(phone_number, voice_api_key)
+
+                if call_result["status"] == "initiated":
+                    st.success(f"Call initiated! Call ID: {call_result['call_id']}")
+                    save_voice_call("user", st.session_state.session_id, 0, "initiated")
+                else:
+                    st.error("Failed to initiate call")
+            else:
+                st.warning("Please enter phone number and API key")
+
+    with col_end:
+        if st.button("End Call", key="end_call", use_container_width=True, disabled=not st.session_state.voice_call_active):
+            st.session_state.voice_call_active = False
+            save_voice_call("user", st.session_state.session_id, st.session_state.voice_call_duration, "completed")
+            st.info("Call ended")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ── SETTINGS PANEL ──
+st.markdown("""
+<div class="settings-panel">
+    <div class="settings-title">Session Info</div>
+""", unsafe_allow_html=True)
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.markdown(f"""
+    <div class="setting-item">
+        <label class="setting-label">Session ID</label>
+        <div class="setting-value">{st.session_state.session_id[:8]}...</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f"""
+    <div class="setting-item">
+        <label class="setting-label">Messages</label>
+        <div class="setting-value">{len(st.session_state.chat_messages)}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown(f"""
+    <div class="setting-item">
+        <label class="setting-label">Status</label>
+        <div class="setting-value" style="color: #10B981;">Active</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('</div></div>', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════
-#  ROUTER
+#  FOOTER
 # ══════════════════════════════════════════════════════════════════
-if st.session_state.page == "chat":
-    render_chat()
-elif st.session_state.page == "settings":
-    render_settings()
-elif st.session_state.page == "client_qa":
-    render_client_qa()
-elif st.session_state.page == "support_qna":
-    render_support_qna()
-else:
-    render_faq()
+st.markdown("""
+<div style="text-align: center; padding: 40px 24px 24px; color: #6B7280; font-size: 0.85rem; border-top: 1px solid rgba(99, 102, 241, 0.12); margin-top: 60px;">
+    <p>© 2026 Convin Support. All rights reserved. | Powered by Claude AI</p>
+</div>
+""", unsafe_allow_html=True)
