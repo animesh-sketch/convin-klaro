@@ -171,19 +171,80 @@ def save_kb_index(index):
     with open(KB_INDEX, 'w') as f:
         json.dump(index, f)
 
+def extract_text_from_file(file_path: str) -> str:
+    """Extract text content from various file types"""
+    file_name = os.path.basename(file_path)
+    file_ext = os.path.splitext(file_name)[1].lower()
+
+    try:
+        # Plain text files
+        if file_ext in ['.txt', '.md', '.csv', '.json', '.log']:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()
+
+        # PDF files
+        elif file_ext == '.pdf':
+            try:
+                import PyPDF2
+                with open(file_path, 'rb') as f:
+                    pdf_reader = PyPDF2.PdfReader(f)
+                    text = ""
+                    for page in pdf_reader.pages[:5]:  # First 5 pages
+                        text += page.extract_text()
+                    return text
+            except:
+                return f"[PDF file: {file_name} - content not extracted]"
+
+        # Word documents
+        elif file_ext == '.docx':
+            try:
+                from docx import Document
+                doc = Document(file_path)
+                return "\n".join([para.text for para in doc.paragraphs])
+            except:
+                return f"[DOCX file: {file_name} - content not extracted]"
+
+        # Excel files
+        elif file_ext in ['.xlsx', '.xls']:
+            try:
+                import pandas as pd
+                df = pd.read_excel(file_path, sheet_name=0)
+                return df.to_string()
+            except:
+                return f"[Excel file: {file_name} - content not extracted]"
+
+        # Fallback - try reading as text
+        else:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()[:2000]  # First 2000 chars
+    except Exception as e:
+        return f"[Error reading {file_name}: {str(e)}]"
+
 def get_kb_context():
     """Get context from uploaded KB files"""
     context = ""
     kb_index = load_kb_index()
-    for file_info in kb_index.get("files", []):
+    files = kb_index.get("files", [])
+
+    if not files:
+        return "No knowledge base files uploaded yet."
+
+    context = f"\n{'='*60}\nKNOWLEDGE BASE ({len(files)} files)\n{'='*60}\n"
+
+    for file_info in files:
         file_path = file_info.get("path", "")
+        file_name = file_info.get("name", "unknown")
+
         if os.path.exists(file_path):
-            try:
-                with open(file_path, 'r', errors='ignore') as f:
-                    content = f.read()[:500]  # First 500 chars
-                    context += f"\n\n[From {file_info.get('name', 'file')}]\n{content}"
-            except:
-                pass
+            content = extract_text_from_file(file_path)
+            # Limit content size
+            if len(content) > 1500:
+                content = content[:1500] + "\n[... content truncated ...]"
+            context += f"\n📄 FILE: {file_name}\n{'-'*40}\n{content}\n"
+        else:
+            context += f"\n📄 FILE: {file_name} (not found)\n"
+
+    context += f"\n{'='*60}\n"
     return context
 
 def get_chat_response(user_message: str) -> str:
@@ -191,21 +252,30 @@ def get_chat_response(user_message: str) -> str:
     try:
         api_key = st.secrets.get("ANTHROPIC_API_KEY")
         if not api_key:
-            return "⚠️ API key not configured. Please add ANTHROPIC_API_KEY to secrets."
+            return "⚠️ API key not configured. Please add ANTHROPIC_API_KEY to Streamlit secrets."
 
         # Get KB context
         kb_context = get_kb_context()
+
         system_prompt = f"""You are a helpful support agent for Convin.
 
-        Knowledge Base Information:
-        {kb_context if kb_context else "No KB files uploaded yet."}
+Your role is to:
+1. Answer questions based on the knowledge base provided below
+2. Be accurate and cite information when from KB
+3. If information is not in KB, say "I don't have that information in my knowledge base"
+4. Be friendly, professional, and concise
 
-        Use the knowledge base to provide accurate answers."""
+{kb_context}
+
+When answering:
+- Use information from the knowledge base above
+- Be specific and reference the source file if helpful
+- If you can't find the answer in KB, tell the user"""
 
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",
-            max_tokens=500,
+            max_tokens=800,
             system=system_prompt,
             messages=[{"role": "user", "content": user_message}]
         )
@@ -219,6 +289,14 @@ def get_chat_response(user_message: str) -> str:
 if page == "💬 Chat":
     st.title("💬 Chat Support")
     st.markdown("*Chat with AI powered by your knowledge base*")
+
+    # KB Status
+    kb_index = load_kb_index()
+    kb_files_count = len(kb_index.get("files", []))
+    if kb_files_count > 0:
+        st.success(f"✅ Knowledge Base Connected ({kb_files_count} files active)")
+    else:
+        st.warning("⚠️ No KB files uploaded. Go to ⚙️ Settings to upload files for better answers.")
 
     col1, col2 = st.columns([1, 1], gap="large")
 
