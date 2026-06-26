@@ -1,0 +1,13 @@
+[client]
+showErrorDetails = true
+
+[logger]
+level = "info"
+
+[theme]
+base = "dark"
+primaryColor = "#6366F1"
+backgroundColor = "#060914"
+secondaryBackgroundColor = "#111827"
+textColor = "#E5E7EB"
+font = "sans serif"
