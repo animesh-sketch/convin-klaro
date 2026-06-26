@@ -1,5 +1,5 @@
 """
-Convin Support - Chat & Voice Support with Knowledge Base
+Convin Support - Modern Chat & Voice Support Platform
 """
 
 import streamlit as st
@@ -21,25 +21,285 @@ st.set_page_config(
 
 KB_DIR = "kb_files"
 KB_INDEX = "kb_index.json"
-
 os.makedirs(KB_DIR, exist_ok=True)
 
 # ══════════════════════════════════════════════════════════════════
-#  STYLES
+#  MODERN STYLING
 # ══════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-body, html, [class*="css"] { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important; }
-.main { background: linear-gradient(135deg, #0a0e1a 0%, #0d1117 100%); color: #e5e7eb; }
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, [class*="css"] {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    background: #0f172a !important;
+    color: #e2e8f0 !important;
+}
+
+/* Main background */
+.main {
+    background: linear-gradient(135deg, #0f172a 0%, #1a202c 100%);
+    background-attachment: fixed;
+}
+
+/* Hide unwanted elements */
 #MainMenu, footer, header { display: none !important; }
 .stDeployButton { display: none !important; }
-.widget-box { background: rgba(17, 24, 39, 0.8); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 20px; }
-.message-container { background: rgba(13, 17, 23, 0.6); border-radius: 8px; padding: 12px; margin-bottom: 8px; border-left: 3px solid #6366f1; }
-.message-container.user { background: rgba(99, 102, 241, 0.15); border-left-color: #22d3ee; margin-left: 20px; }
-.message-container.assistant { background: rgba(99, 102, 241, 0.08); border-left-color: #10b981; margin-right: 20px; }
-.metric-card { background: rgba(17, 24, 39, 0.6); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 10px; padding: 20px; text-align: center; }
-.metric-value { font-size: 2rem; font-weight: 700; color: #6366f1; }
-.metric-label { font-size: 0.9rem; color: #94a3b8; margin-top: 8px; }
+
+/* ────────────────────────────────────── */
+/* SIDEBAR STYLING */
+/* ────────────────────────────────────── */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+}
+
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] > [style*="flex-direction"] {
+    gap: 1rem;
+}
+
+/* ────────────────────────────────────── */
+/* CARD & CONTAINER STYLING */
+/* ────────────────────────────────────── */
+.card {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.6) 100%);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 16px;
+    padding: 24px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    border-color: rgba(148, 163, 184, 0.4);
+    box-shadow: 0 12px 48px rgba(59, 130, 246, 0.2);
+}
+
+/* ────────────────────────────────────── */
+/* TYPOGRAPHY */
+/* ────────────────────────────────────── */
+h1, h2, h3 {
+    font-weight: 700 !important;
+    letter-spacing: -0.5px;
+}
+
+h1 {
+    font-size: 2.5rem !important;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+h2 {
+    font-size: 1.75rem !important;
+    color: #e2e8f0 !important;
+    margin-bottom: 1rem !important;
+}
+
+h3 {
+    font-size: 1.25rem !important;
+    color: #cbd5e1 !important;
+}
+
+/* ────────────────────────────────────── */
+/* BUTTONS */
+/* ────────────────────────────────────── */
+.stButton > button {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    padding: 12px 24px !important;
+    font-size: 0.95rem !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3) !important;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.5) !important;
+}
+
+/* ────────────────────────────────────── */
+/* INPUTS */
+/* ────────────────────────────────────── */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > select {
+    background: rgba(30, 41, 59, 0.6) !important;
+    border: 1px solid rgba(148, 163, 184, 0.3) !important;
+    border-radius: 10px !important;
+    color: #e2e8f0 !important;
+    padding: 12px 16px !important;
+    font-size: 0.95rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* ────────────────────────────────────── */
+/* MESSAGE CONTAINERS */
+/* ────────────────────────────────────── */
+.message-user {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.1) 100%);
+    border-left: 3px solid #3b82f6;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    margin-left: 30px;
+    color: #cbd5e1;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.message-assistant {
+    background: linear-gradient(135deg, rgba(34, 211, 238, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+    border-left: 3px solid #22d3ee;
+    padding: 14px 16px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    margin-right: 30px;
+    color: #e2e8f0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.message-user strong { color: #7dd3fc; }
+.message-assistant strong { color: #22d3ee; }
+
+/* ────────────────────────────────────── */
+/* METRIC CARDS */
+/* ────────────────────────────────────── */
+.metric-box {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.05) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 14px;
+    padding: 24px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.metric-box:hover {
+    border-color: rgba(59, 130, 246, 0.6);
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+    transform: translateY(-4px);
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    margin-top: 8px;
+    font-weight: 500;
+}
+
+/* ────────────────────────────────────── */
+/* FILE UPLOAD */
+/* ────────────────────────────────────── */
+[data-testid="stFileUploadDropzone"] {
+    border: 2px dashed rgba(59, 130, 246, 0.4) !important;
+    border-radius: 12px !important;
+    background: rgba(59, 130, 246, 0.05) !important;
+    padding: 30px !important;
+    transition: all 0.3s ease !important;
+}
+
+[data-testid="stFileUploadDropzone"]:hover {
+    border-color: rgba(59, 130, 246, 0.8) !important;
+    background: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* ────────────────────────────────────── */
+/* DIVIDER */
+/* ────────────────────────────────────── */
+hr {
+    background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.2), transparent);
+    border: none;
+    height: 1px;
+    margin: 2rem 0 !important;
+}
+
+/* ────────────────────────────────────── */
+/* STATUS BADGES */
+/* ────────────────────────────────────── */
+.status-badge {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.status-active {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.status-inactive {
+    background: rgba(148, 163, 184, 0.2);
+    color: #94a3b8;
+    border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+/* ────────────────────────────────────── */
+/* RADIO BUTTONS */
+/* ────────────────────────────────────── */
+[data-testid="stRadio"] {
+    display: flex;
+    gap: 1rem;
+}
+
+[data-testid="stRadio"] label {
+    background: rgba(30, 41, 59, 0.6);
+    border: 2px solid rgba(148, 163, 184, 0.2);
+    padding: 12px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+[data-testid="stRadio"] label:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* ────────────────────────────────────── */
+/* ANIMATIONS */
+/* ────────────────────────────────────── */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-in {
+    animation: slideIn 0.3s ease-out;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -56,22 +316,41 @@ if "voice_active" not in st.session_state:
     st.session_state.voice_active = False
 
 # ══════════════════════════════════════════════════════════════════
-#  SIDEBAR & NAVIGATION
+#  SIDEBAR
 # ══════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("### 🔷 Convin Support")
+    st.markdown("*Modern Support Platform*")
     st.divider()
-    page = st.radio("Select Page", ["💬 Chat", "📊 Analytics", "⚙️ Settings"], label_visibility="collapsed")
+
+    page = st.radio(
+        "Navigation",
+        ["💬 Chat", "📊 Analytics", "⚙️ Settings"],
+        label_visibility="collapsed"
+    )
+
     st.divider()
-    st.markdown(f"**Session ID:** `{st.session_state.session_id[:8]}...`")
-    st.markdown(f"**Messages:** {len(st.session_state.chat_messages)}")
-    st.markdown(f"**KB Files:** {len(st.session_state.kb_files)}")
+
+    with st.container():
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Messages", len(st.session_state.chat_messages), "📬")
+        with col2:
+            st.metric("KB Files", len(st.session_state.kb_files), "📚")
+
+    st.markdown("---")
+
+    st.markdown("""
+    **Session Info**
+    - 🔷 ID: `" + st.session_state.session_id[:8] + "...`
+    - ✅ Status: Active
+    - 🌍 Region: Cloud
+    """)
 
 # ══════════════════════════════════════════════════════════════════
 #  KB FUNCTIONS
 # ══════════════════════════════════════════════════════════════════
 def load_kb_index():
-    """Load KB index"""
     try:
         if os.path.exists(KB_INDEX):
             with open(KB_INDEX, 'r') as f:
@@ -81,24 +360,20 @@ def load_kb_index():
     return {"files": []}
 
 def save_kb_index(index):
-    """Save KB index"""
     with open(KB_INDEX, 'w') as f:
         json.dump(index, f, indent=2)
 
 def read_file_content(file_path: str) -> str:
-    """Read file content - simple text extraction"""
     try:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
-            # Limit content size
             if len(content) > 2000:
                 content = content[:2000] + "\n[... truncated ...]"
             return content
     except Exception as e:
-        return f"[Error reading file: {str(e)}]"
+        return f"[Error: {str(e)}]"
 
 def get_kb_context():
-    """Build KB context for chat"""
     kb_index = load_kb_index()
     files = kb_index.get("files", [])
 
@@ -120,7 +395,6 @@ def get_kb_context():
     return context
 
 def get_chat_response(user_message: str) -> str:
-    """Get response from Claude"""
     try:
         api_key = st.secrets.get("ANTHROPIC_API_KEY")
         if not api_key:
@@ -154,70 +428,134 @@ Instructions:
 #  PAGE: CHAT
 # ══════════════════════════════════════════════════════════════════
 if page == "💬 Chat":
-    st.title("💬 Chat Support")
-    st.markdown("*Chat with AI powered by your knowledge base*")
+    st.markdown("""
+    <style>
+    .page-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        margin-bottom: 0.5rem;
+    }
+    </style>
+    <div class="page-title">💬 Chat Support</div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("*Powered by your knowledge base*")
 
     kb_index = load_kb_index()
     kb_count = len(kb_index.get("files", []))
 
     if kb_count > 0:
-        st.success(f"✅ KB Connected: {kb_count} file(s) active")
+        st.success(f"✅ **KB Active** — {kb_count} file(s) connected", icon="📚")
     else:
-        st.info("⚠️ No KB files. Go to Settings to upload files.")
+        st.info("⚠️ No KB files. Upload files in Settings for better answers.", icon="💡")
 
-    col1, col2 = st.columns([1, 1], gap="large")
+    st.divider()
+
+    col1, col2 = st.columns([1.2, 1], gap="large")
 
     with col1:
-        st.subheader("💬 Conversation")
-        chat_display = st.container(height=400, border=True)
+        st.markdown("### 💬 Conversation")
 
-        if st.session_state.chat_messages:
-            for msg in st.session_state.chat_messages:
-                if msg["role"] == "user":
-                    chat_display.markdown(f"""<div class="message-container user"><b>You:</b> {msg["content"]}</div>""", unsafe_allow_html=True)
-                else:
-                    chat_display.markdown(f"""<div class="message-container assistant"><b>Support:</b> {msg["content"]}</div>""", unsafe_allow_html=True)
-        else:
-            chat_display.info("💬 Start a conversation...")
+        chat_display = st.container(height=450, border=False)
+
+        with chat_display:
+            if st.session_state.chat_messages:
+                for msg in st.session_state.chat_messages:
+                    if msg["role"] == "user":
+                        st.markdown(
+                            f"""<div class="message-user"><strong>You:</strong> {msg["content"]}</div>""",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            f"""<div class="message-assistant"><strong>Support:</strong> {msg["content"]}</div>""",
+                            unsafe_allow_html=True
+                        )
+            else:
+                st.info("💬 Start a conversation...", icon="🔷")
 
         st.divider()
-        user_input = st.text_input("Your message", placeholder="Type your question...", label_visibility="collapsed", key="chat_input")
+
+        col_input = st.columns([1])[0]
+        with col_input:
+            user_input = st.text_input(
+                "Message",
+                placeholder="Ask me anything...",
+                label_visibility="collapsed",
+                key="chat_input"
+            )
 
         if user_input:
             st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
-            with st.spinner("Thinking..."):
+            with st.spinner("⏳ Thinking..."):
                 response = get_chat_response(user_input)
 
             st.session_state.chat_messages.append({"role": "assistant", "content": response})
             st.rerun()
 
     with col2:
-        st.subheader("📞 Voice Call")
+        st.markdown("### 📞 Voice Call")
 
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            st.metric("Status", "Ready" if not st.session_state.voice_active else "Active", "🟢")
-        with col_s2:
-            st.metric("Session", st.session_state.session_id[:8], "ID")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        with st.container():
+            col_s1, col_s2 = st.columns(2)
+            with col_s1:
+                st.markdown("""
+                <div class="metric-box">
+                    <div style="font-size: 2rem; margin-bottom: 8px;">🟢</div>
+                    <div class="metric-label">Status</div>
+                    <div class="metric-value" style="font-size: 1.3rem; margin-top: 4px;">
+                    """ + ("Active" if st.session_state.voice_active else "Ready") + """
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with col_s2:
+                st.markdown(f"""
+                <div class="metric-box">
+                    <div style="font-size: 2rem; margin-bottom: 8px;">📞</div>
+                    <div class="metric-label">Calls</div>
+                    <div class="metric-value" style="font-size: 1.3rem; margin-top: 4px;">0</div>
+                </div>
+                """, unsafe_allow_html=True)
 
         st.divider()
 
-        phone = st.text_input("Phone Number", placeholder="+1 (555) 000-0000", key="phone")
-        api_key = st.text_input("Voice API Key", type="password", key="voice_key")
+        st.markdown("**Enter Details**")
+
+        phone = st.text_input(
+            "Phone",
+            placeholder="+1 (555) 000-0000",
+            key="phone",
+            label_visibility="collapsed"
+        )
+
+        api_key = st.text_input(
+            "API Key",
+            type="password",
+            placeholder="Voice agent API key",
+            key="voice_key",
+            label_visibility="collapsed"
+        )
 
         col_btn1, col_btn2 = st.columns(2)
 
         with col_btn1:
-            if st.button("📞 Start Call", use_container_width=True):
+            if st.button("📞 Start", use_container_width=True, key="start"):
                 if phone and api_key:
                     st.session_state.voice_active = True
-                    st.success(f"✅ Call initiated!\nPhone: {phone}")
+                    st.success(f"✅ Call started\n📱 {phone}")
                 else:
-                    st.error("❌ Enter phone and API key")
+                    st.error("❌ Enter phone & API key")
 
         with col_btn2:
-            if st.button("❌ End Call", use_container_width=True, disabled=not st.session_state.voice_active):
+            if st.button("❌ End", use_container_width=True, key="end", disabled=not st.session_state.voice_active):
                 st.session_state.voice_active = False
                 st.info("✅ Call ended")
 
@@ -225,57 +563,93 @@ if page == "💬 Chat":
 #  PAGE: ANALYTICS
 # ══════════════════════════════════════════════════════════════════
 elif page == "📊 Analytics":
-    st.title("📊 Analytics Dashboard")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.markdown("""<div class="metric-card"><div class="metric-value">1,247</div><div class="metric-label">Total Messages</div></div>""", unsafe_allow_html=True)
-    with col2:
-        st.markdown("""<div class="metric-card"><div class="metric-value">94.2%</div><div class="metric-label">Satisfaction</div></div>""", unsafe_allow_html=True)
-    with col3:
-        st.markdown("""<div class="metric-card"><div class="metric-value">2.3min</div><div class="metric-label">Avg Response</div></div>""", unsafe_allow_html=True)
-    with col4:
-        st.markdown("""<div class="metric-card"><div class="metric-value">342</div><div class="metric-label">Active Users</div></div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="page-title">📊 Analytics Dashboard</div>""", unsafe_allow_html=True)
+    st.markdown("*Support performance metrics*")
 
     st.divider()
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3, col4 = st.columns(4, gap="medium")
 
     with col1:
-        st.subheader("📈 Messages per Day")
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value">1.2K</div>
+            <div class="metric-label">Total Messages</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value">94%</div>
+            <div class="metric-label">Satisfaction</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value">2.3m</div>
+            <div class="metric-label">Avg Response</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        st.markdown("""
+        <div class="metric-box">
+            <div class="metric-value">342</div>
+            <div class="metric-label">Active Users</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.divider()
+
+    col1, col2 = st.columns(2, gap="medium")
+
+    with col1:
+        st.markdown("### 📈 Messages per Day")
         import pandas as pd
         df = pd.DataFrame({"Day": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], "Messages": [145, 182, 156, 198, 212, 95, 78]})
-        st.bar_chart(df.set_index("Day"))
+        st.bar_chart(df.set_index("Day"), use_container_width=True)
 
     with col2:
-        st.subheader("🔄 Session Duration")
+        st.markdown("### 🔄 Session Duration")
         df2 = pd.DataFrame({"Hour": ["12am", "3am", "6am", "9am", "12pm", "3pm", "6pm", "9pm"], "Duration": [15, 12, 22, 45, 67, 82, 71, 48]})
-        st.area_chart(df2.set_index("Hour"))
+        st.area_chart(df2.set_index("Hour"), use_container_width=True)
 
     st.divider()
-    st.subheader("📊 Top Topics")
-    for topic, count in [("Billing", 245), ("Technical Support", 198), ("Account Mgmt", 156), ("Features", 142), ("General", 128)]:
-        col1, col2 = st.columns([3, 1])
+
+    st.markdown("### 📊 Top Topics")
+    topics = [("Billing", 245), ("Technical Support", 198), ("Account Mgmt", 156), ("Features", 142), ("General", 128)]
+
+    for topic, count in topics:
+        col1, col2, col3 = st.columns([2, 0.5, 1])
         with col1:
             st.progress(count / 250)
         with col2:
+            st.write("")
+        with col3:
             st.markdown(f"**{topic}**: {count}")
 
 # ══════════════════════════════════════════════════════════════════
 #  PAGE: SETTINGS
 # ══════════════════════════════════════════════════════════════════
 elif page == "⚙️ Settings":
-    st.title("⚙️ Settings")
+    st.markdown("""<div class="page-title">⚙️ Settings & Configuration</div>""", unsafe_allow_html=True)
+    st.markdown("*Manage KB and preferences*")
 
-    col1, col2 = st.columns([1, 1], gap="large")
+    st.divider()
+
+    col1, col2 = st.columns([1.2, 1], gap="large")
 
     with col1:
-        st.subheader("📚 Knowledge Base")
-        st.markdown("Upload files to enhance responses")
+        st.markdown("### 📚 Knowledge Base Management")
+        st.markdown("Upload files to enhance AI responses")
+
+        st.divider()
 
         uploaded_files = st.file_uploader(
-            "Upload KB Files (any type)",
+            "Upload Files",
             accept_multiple_files=True,
             key="kb_upload"
         )
@@ -288,7 +662,6 @@ elif page == "⚙️ Settings":
                 with open(file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
 
-                # Check if already in index
                 exists = any(f["name"] == uploaded_file.name for f in kb_index["files"])
                 if not exists:
                     kb_index["files"].append({
@@ -300,54 +673,99 @@ elif page == "⚙️ Settings":
 
             save_kb_index(kb_index)
             st.session_state.kb_files = kb_index["files"]
-            st.success(f"✅ Uploaded {len(uploaded_files)} file(s)")
+            st.success(f"✅ {len(uploaded_files)} file(s) uploaded!", icon="📥")
 
         st.divider()
-        st.subheader("📋 Files")
+
+        st.markdown("### 📋 Uploaded Files")
 
         kb_index = load_kb_index()
         st.session_state.kb_files = kb_index["files"]
 
         if kb_index["files"]:
-            st.markdown(f"**Total:** {len(kb_index['files'])} file(s)")
+            st.markdown(f"**Total:** `{len(kb_index['files'])} files` • 💾 Permanent Storage")
+
             for file_info in kb_index["files"]:
-                col_name, col_size = st.columns([2, 1])
-                with col_name:
-                    st.markdown(f"📄 {file_info['name']}")
-                with col_size:
-                    size_mb = file_info.get('size', 0) / 1024 / 1024
-                    st.markdown(f"{size_mb:.2f}MB")
+                with st.container():
+                    col_icon, col_name, col_size, col_date = st.columns([0.5, 2, 1, 1.5])
+
+                    with col_icon:
+                        st.markdown("📄")
+                    with col_name:
+                        st.markdown(f"**{file_info['name']}**")
+                    with col_size:
+                        size_mb = file_info.get('size', 0) / 1024 / 1024
+                        st.markdown(f"`{size_mb:.2f}MB`")
+                    with col_date:
+                        st.markdown(f"*{file_info.get('uploaded_at', 'N/A')[:10]}*", help="Upload date")
+
+                    st.divider()
         else:
-            st.info("💾 No KB files yet")
+            st.info("💾 No KB files yet. Start uploading to enhance AI responses!", icon="📂")
 
     with col2:
-        st.subheader("⚙️ Configuration")
+        st.markdown("### 🔧 Configuration")
 
         st.markdown("**API Status**")
-        api_status = "✅ OK" if st.secrets.get("ANTHROPIC_API_KEY") else "❌ Missing"
-        st.markdown(f"Anthropic API: {api_status}")
+        api_ok = "✅ OK" if st.secrets.get("ANTHROPIC_API_KEY") else "❌ Missing"
+        st.markdown(f"""
+        <div class="metric-box">
+            <div style="text-align: left; padding: 16px;">
+                <div style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 8px;">Anthropic API</div>
+                <div style="font-size: 1.2rem; font-weight: 600; color: {'#10b981' if api_ok == '✅ OK' else '#ef4444'};">{api_ok}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.divider()
 
         st.markdown("**Chat Settings**")
-        temperature = st.slider("Response Creativity", 0.0, 1.0, 0.7, 0.1)
-        max_tokens = st.slider("Max Response Length", 100, 2000, 500, 100)
+
+        col_temp, col_tokens = st.columns(2)
+        with col_temp:
+            temperature = st.slider("Creativity", 0.0, 1.0, 0.7, 0.1)
+        with col_tokens:
+            max_tokens = st.slider("Response Length", 100, 2000, 800, 100)
 
         st.divider()
 
-        st.markdown("**Session**")
-        st.markdown(f"🔷 ID: `{st.session_state.session_id}`")
-        st.markdown(f"💬 Messages: {len(st.session_state.chat_messages)}")
-        st.markdown(f"📚 KB Files: {len(st.session_state.kb_files)}")
+        st.markdown("**Session Information**")
+
+        st.markdown(f"""
+        <div style="background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; padding: 16px; border-radius: 8px;">
+            <div style="font-size: 0.9rem; color: #94a3b8; margin-bottom: 12px;">🔷 <strong>Session ID</strong></div>
+            <code style="font-family: 'Fira Code'; font-size: 0.85rem; color: #cbd5e1;">{st.session_state.session_id}</code>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("")
+
+        col_msgs, col_files = st.columns(2)
+        with col_msgs:
+            st.metric("Messages", len(st.session_state.chat_messages), "💬")
+        with col_files:
+            st.metric("KB Files", len(st.session_state.kb_files), "📚")
 
         st.divider()
 
-        if st.button("🔄 Reset Chat", use_container_width=True):
+        if st.button("🔄 Reset Chat History", use_container_width=True):
             st.session_state.chat_messages = []
-            st.success("✅ Chat cleared")
+            st.success("✅ Chat history cleared", icon="🗑️")
             st.rerun()
 
-        st.info("💾 All KB files stored permanently")
+        st.markdown("""
+        <div style="background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; padding: 12px; border-radius: 8px; margin-top: 12px;">
+            <div style="font-size: 0.85rem; color: #10b981; font-weight: 600;">💾 All KB files are stored permanently</div>
+        </div>
+        """, unsafe_allow_html=True)
 
+# ══════════════════════════════════════════════════════════════════
+#  FOOTER
+# ══════════════════════════════════════════════════════════════════
 st.divider()
-st.markdown("<div style='text-align: center; color: #6b7280; font-size: 0.85rem;'><p>© 2026 Convin Support | Powered by Claude AI</p></div>", unsafe_allow_html=True)
+st.markdown("""
+<div style="text-align: center; padding: 24px 0; color: #64748b; font-size: 0.9rem;">
+    <p>🔷 <strong>Convin Support</strong> — Modern AI-Powered Support Platform</p>
+    <p style="margin-top: 8px; font-size: 0.8rem;">© 2026 Convin | Powered by Claude AI</p>
+</div>
+""", unsafe_allow_html=True)
