@@ -445,14 +445,16 @@ elif page == "⚙️ Settings":
         st.divider()
 
         # KB Files List
-        st.subheader("📋 Uploaded Files")
+        st.subheader("📋 Uploaded Files (Permanent Storage)")
 
         kb_index = load_kb_index()
         st.session_state.kb_files = kb_index["files"]
 
         if kb_index["files"]:
+            st.markdown(f"**Total Files:** {len(kb_index['files'])}")
+
             for i, file_info in enumerate(kb_index["files"]):
-                col_name, col_size, col_delete = st.columns([2, 1, 1])
+                col_name, col_size, col_date = st.columns([2, 1, 1.5])
 
                 with col_name:
                     st.markdown(f"📄 **{file_info['name']}**")
@@ -461,21 +463,11 @@ elif page == "⚙️ Settings":
                     size_mb = file_info.get('size', 0) / 1024 / 1024
                     st.markdown(f"`{size_mb:.2f}MB`")
 
-                with col_delete:
-                    if st.button("🗑️", key=f"delete_{i}"):
-                        # Remove file
-                        try:
-                            os.remove(file_info["path"])
-                        except:
-                            pass
-
-                        # Remove from index
-                        kb_index["files"].pop(i)
-                        save_kb_index(kb_index)
-                        st.session_state.kb_files = kb_index["files"]
-                        st.rerun()
+                with col_date:
+                    uploaded_at = file_info.get('uploaded_at', 'N/A')
+                    st.markdown(f"*{uploaded_at[:10]}*")
         else:
-            st.info("No KB files uploaded yet. Upload files to get started!")
+            st.info("💾 No KB files uploaded yet. Upload files to get started!")
 
     # Settings
     with col2:
@@ -519,19 +511,7 @@ elif page == "⚙️ Settings":
             st.success("✅ Chat history cleared")
             st.rerun()
 
-        if st.button("🗑️ Clear KB", use_container_width=True):
-            # Clear KB directory
-            import shutil
-            if os.path.exists(KB_DIR):
-                shutil.rmtree(KB_DIR)
-            os.makedirs(KB_DIR, exist_ok=True)
-
-            # Clear index
-            kb_index = {"files": []}
-            save_kb_index(kb_index)
-            st.session_state.kb_files = []
-            st.success("✅ KB cleared")
-            st.rerun()
+        st.info("💾 **All KB files are permanently stored.** Upload more files to enhance your knowledge base.")
 
 st.divider()
 st.markdown(
