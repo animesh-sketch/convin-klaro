@@ -310,6 +310,52 @@
             margin-top: 8px;
         }
 
+        .demo-widget-reopen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 280px;
+            text-align: center;
+            color: #cbd5e1;
+        }
+
+        .demo-widget-reopen.show {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        .reopen-btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .reopen-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+        }
+
+        .demo-widget-container.closed {
+            background: rgba(15, 23, 42, 0.5);
+            border-color: rgba(148, 163, 184, 0.1);
+        }
+
+        .demo-widget-container.closed .chat-widget-container {
+            display: none;
+        }
+
         @media (max-width: 768px) {
             .demo-section {
                 grid-template-columns: 1fr;
@@ -352,14 +398,20 @@
                 <p style="color: #10b981; font-weight: 600; margin-top: 20px;">✓ Try typing a message in the widget →</p>
             </div>
 
-            <div class="demo-widget-container">
+            <div class="demo-widget-container" id="demo-container">
+                <div class="demo-widget-reopen" id="reopen-message">
+                    <div style="font-size: 2rem;">💬</div>
+                    <p>Chat closed</p>
+                    <button class="reopen-btn" onclick="toggleDemoWidget()">Reopen Chat</button>
+                </div>
+
                 <div class="chat-widget-container">
                     <div class="widget-header">
                         <div>
                             <h3>💬 Convin Support</h3>
                             <p>We usually reply in minutes</p>
                         </div>
-                        <button class="close-btn">✕</button>
+                        <button class="close-btn" onclick="toggleDemoWidget()">✕</button>
                     </div>
 
                     <div class="widget-messages" id="messages">
@@ -447,6 +499,24 @@ Content-Type: application/json<br>
 
     <script>
         let messages = [];
+        let isWidgetOpen = true;
+
+        function toggleDemoWidget() {
+            const container = document.getElementById('demo-container');
+            const reopenMsg = document.getElementById('reopen-message');
+
+            isWidgetOpen = !isWidgetOpen;
+
+            if (isWidgetOpen) {
+                // Open widget
+                container.classList.remove('closed');
+                reopenMsg.classList.remove('show');
+            } else {
+                // Close widget
+                container.classList.add('closed');
+                reopenMsg.classList.add('show');
+            }
+        }
 
         function sendMessage() {
             const input = document.getElementById('message-input');
