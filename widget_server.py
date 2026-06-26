@@ -128,6 +128,11 @@ def analytics():
     """Analytics dashboard"""
     return render_template('analytics.html')
 
+@app.route('/floating-widget', methods=['GET'])
+def floating_widget():
+    """Floating chat widget page"""
+    return render_template('floating_widget.html')
+
 @app.route('/widget', methods=['GET'])
 def widget():
     """Serve the widget HTML"""

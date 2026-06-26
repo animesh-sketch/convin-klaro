@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convin Floating Chat Widget</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f5f5f5;
+            padding: 40px 20px;
+        }
+
+        .page-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            color: #1f2937;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 1.1rem;
+        }
+
+        .content {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            line-height: 1.8;
+            color: #374151;
+        }
+
+        .content h2 {
+            color: #1f2937;
+            margin-bottom: 16px;
+            margin-top: 24px;
+        }
+
+        .content p {
+            margin-bottom: 16px;
+        }
+
+        /* ══════════════════════════════════════════════════════════════ */
+        /* FLOATING WIDGET STYLES */
+        /* ══════════════════════════════════════════════════════════════ */
+
+        .floating-widget-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        /* Floating Bubble */
+        .floating-bubble {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+            border: none;
+            cursor: grab;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .floating-bubble:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.6);
+        }
+
+        .floating-bubble:active {
+            cursor: grabbing;
+        }
+
+        .floating-bubble.hidden {
+            display: none;
+        }
+
+        /* Chat Widget Container */
+        .floating-chat-widget {
+            position: absolute;
+            bottom: 90px;
+            right: 0;
+            width: 400px;
+            height: 600px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 5px 40px rgba(0, 0, 0, 0.16);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .floating-chat-widget.open {
+            display: flex;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Header */
+        .floating-header {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: grab;
+            user-select: none;
+        }
+
+        .floating-header h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .floating-header p {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            margin: 4px 0 0 0;
+        }
+
+        .floating-header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .minimize-btn,
+        .close-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .minimize-btn:hover,
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Messages */
+        .floating-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: #f9fafb;
+        }
+
+        .message {
+            display: flex;
+            gap: 8px;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+            border-bottom-left-radius: 4px;
+        }
+
+        .welcome {
+            text-align: center;
+            padding: 24px 16px;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .welcome-icon {
+            font-size: 2.5rem;
+            margin-bottom: 12px;
+        }
+
+        .welcome h4 {
+            font-size: 1rem;
+            margin-bottom: 6px;
+            color: #374151;
+        }
+
+        .welcome p {
+            font-size: 0.85rem;
+            color: #9ca3af;
+        }
+
+        /* Input */
+        .floating-input-area {
+            padding: 12px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 8px;
+        }
+
+        .floating-input-area input {
+            flex: 1;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.9rem;
+            font-family: 'Poppins', sans-serif;
+            background: #f9fafb;
+            transition: all 0.3s ease;
+        }
+
+        .floating-input-area input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .floating-send-btn {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .floating-send-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Scrollbar */
+        .floating-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .floating-messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .floating-messages::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+
+        .floating-messages::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        /* Mobile */
+        @media (max-width: 480px) {
+            .floating-chat-widget {
+                width: 100%;
+                height: 100%;
+                bottom: 0;
+                right: 0;
+                border-radius: 0;
+            }
+
+            .floating-bubble {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Page Content -->
+    <div class="page-container">
+        <div class="header">
+            <h1>💬 Convin Floating Chat Widget</h1>
+            <p>Drag the chat bubble around - it's fully interactive!</p>
+        </div>
+
+        <div class="content">
+            <h2>Welcome to Convin Support</h2>
+            <p>Our floating chat widget is a revolutionary way to engage with customers. It's beautiful, responsive, and incredibly easy to use.</p>
+
+            <h2>Key Features</h2>
+            <p>
+                ✨ <strong>Draggable Bubble</strong> - Move the chat widget anywhere on your screen<br>
+                💬 <strong>Full Chat</strong> - Send and receive messages in real-time<br>
+                ⚡ <strong>Smooth Animations</strong> - Beautiful transitions and effects<br>
+                📱 <strong>Mobile Responsive</strong> - Works perfectly on all devices<br>
+                🎨 <strong>Beautiful Design</strong> - Modern UI with premium styling<br>
+                🔧 <strong>Easy Integration</strong> - One line of code to embed<br>
+            </p>
+
+            <h2>How It Works</h2>
+            <p>
+                The floating widget appears in the bottom-right corner of your page. You can click on it to open the chat, or drag it around the screen. When you're done, simply minimize it back to a bubble. All your messages are preserved, and the widget respects your preferences.
+            </p>
+
+            <h2>Perfect For</h2>
+            <p>
+                E-commerce sites • SaaS platforms • Service businesses • Support centers • Customer engagement • Lead generation • Feedback collection • Product support
+            </p>
+
+            <h2>Getting Started</h2>
+            <p>
+                To embed this widget on your website, simply add this single line of code:
+            </p>
+            <pre style="background: #f3f4f6; padding: 16px; border-radius: 8px; overflow-x: auto; color: #1f2937;"><code>&lt;script src="https://your-domain.com/floating-widget.js"&gt;&lt;/script&gt;</code></pre>
+
+            <h2>Customization</h2>
+            <p>
+                The widget is fully customizable. You can change colors, position, size, welcome message, and more. All configuration is done through JavaScript, making it incredibly flexible for your needs.
+            </p>
+
+            <p style="margin-top: 40px; padding-top: 40px; border-top: 1px solid #e5e7eb; color: #6b7280;">
+                Try the floating chat widget on this page! Click the bubble in the bottom-right corner to start a conversation.
+            </p>
+        </div>
+    </div>
+
+    <!-- Floating Widget -->
+    <div class="floating-widget-container" id="floating-container">
+        <!-- Floating Bubble -->
+        <button class="floating-bubble" id="floating-bubble" title="Open chat">💬</button>
+
+        <!-- Chat Widget -->
+        <div class="floating-chat-widget" id="floating-widget">
+            <!-- Header (Draggable) -->
+            <div class="floating-header" id="floating-header">
+                <div>
+                    <h3>💬 Convin Support</h3>
+                    <p>We usually reply in minutes <span class="badge">LIVE</span></p>
+                </div>
+                <div class="floating-header-actions">
+                    <button class="minimize-btn" onclick="minimizeWidget()" title="Minimize">−</button>
+                    <button class="close-btn" onclick="closeWidget()" title="Close">✕</button>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            <div class="floating-messages" id="floating-messages">
+                <div class="welcome">
+                    <div>
+                        <div class="welcome-icon">👋</div>
+                        <h4>Welcome!</h4>
+                        <p>How can we help you today?</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input -->
+            <div class="floating-input-area">
+                <input
+                    type="text"
+                    id="floating-input"
+                    placeholder="Type your message..."
+                    onkeypress="handleKeyPress(event)"
+                >
+                <button class="floating-send-btn" onclick="sendMessage()">📤</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin + '/api/chat';
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+
+        const container = document.getElementById('floating-container');
+        const bubble = document.getElementById('floating-bubble');
+        const widget = document.getElementById('floating-widget');
+        const header = document.getElementById('floating-header');
+
+        // ══════════════════════════════════════════════════════════════
+        // DRAG FUNCTIONALITY
+        // ══════════════════════════════════════════════════════════════
+
+        bubble.addEventListener('mousedown', startDrag);
+        header.addEventListener('mousedown', startDrag);
+
+        function startDrag(e) {
+            if (e.target.tagName === 'BUTTON') return;
+
+            isDragging = true;
+            initialX = e.clientX - container.offsetLeft;
+            initialY = e.clientY - container.offsetTop;
+            currentX = initialX;
+            currentY = initialY;
+
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDrag);
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+
+            e.preventDefault();
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+
+            // Keep within viewport
+            const maxX = window.innerWidth - 70;
+            const maxY = window.innerHeight - 70;
+
+            currentX = Math.max(0, Math.min(currentX, maxX));
+            currentY = Math.max(0, Math.min(currentY, maxY));
+
+            container.style.bottom = 'auto';
+            container.style.right = 'auto';
+            container.style.left = currentX + 'px';
+            container.style.top = currentY + 'px';
+        }
+
+        function stopDrag() {
+            isDragging = false;
+            document.removeEventListener('mousemove', drag);
+            document.removeEventListener('mouseup', stopDrag);
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // WIDGET CONTROLS
+        // ══════════════════════════════════════════════════════════════
+
+        bubble.addEventListener('click', openWidget);
+
+        function openWidget() {
+            widget.classList.add('open');
+            bubble.classList.add('hidden');
+            document.getElementById('floating-input').focus();
+        }
+
+        function minimizeWidget() {
+            widget.classList.remove('open');
+            bubble.classList.remove('hidden');
+        }
+
+        function closeWidget() {
+            widget.classList.remove('open');
+            bubble.classList.remove('hidden');
+            document.getElementById('floating-messages').innerHTML = `
+                <div class="welcome">
+                    <div>
+                        <div class="welcome-icon">👋</div>
+                        <h4>Welcome!</h4>
+                        <p>How can we help you today?</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // MESSAGING
+        // ══════════════════════════════════════════════════════════════
+
+        function sendMessage() {
+            const input = document.getElementById('floating-input');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            addMessage(message, 'user');
+            input.value = '';
+
+            // Simulate API call
+            setTimeout(() => {
+                const responses = [
+                    '👋 Thanks for reaching out! How can I help?',
+                    '💡 Great question! Let me assist you.',
+                    '📞 I\'m here to help. What do you need?',
+                    '✨ How can I make your day better?',
+                    '🎯 I\'d be happy to help with that!'
+                ];
+                const response = responses[Math.floor(Math.random() * responses.length)];
+                addMessage(response, 'assistant');
+            }, 800);
+        }
+
+        function addMessage(text, sender) {
+            const container = document.getElementById('floating-messages');
+
+            // Clear welcome
+            const welcome = container.querySelector('.welcome');
+            if (welcome && container.children.length === 1) {
+                welcome.remove();
+            }
+
+            const msgEl = document.createElement('div');
+            msgEl.className = `message ${sender}`;
+            msgEl.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+
+            container.appendChild(msgEl);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
